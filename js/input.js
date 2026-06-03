@@ -106,6 +106,8 @@ export function initKeyboard() {
 }
 
 export function initMouseControls() {
+  const isMousePointer = (e) => !e.pointerType || e.pointerType === 'mouse';
+
   const updateMouse = (e) => {
     const dx = e.clientX - W / 2;
     const dy = e.clientY - H / 2;
@@ -120,13 +122,13 @@ export function initMouseControls() {
   };
 
   window.addEventListener('pointerdown', (e) => {
-    if (e.button !== 0 || !document.body.classList.contains('playing')) return;
+    if (!isMousePointer(e) || e.button !== 0 || !document.body.classList.contains('playing')) return;
     mouseControl.active = true;
     updateMouse(e);
   });
 
   window.addEventListener('pointermove', (e) => {
-    if (!mouseControl.active) return;
+    if (!mouseControl.active || !isMousePointer(e)) return;
     updateMouse(e);
   });
 

@@ -106,6 +106,9 @@ export function resetPlayer() {
   player.MAXSP = 7.2;
   cam.x = 0;
   cam.y = 0;
+  mouseControl.active = false;
+  mouseControl.dx = 0;
+  mouseControl.dy = 0;
 }
 
 export const player = {
