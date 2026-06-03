@@ -11,6 +11,7 @@ Déploie le dossier racine sur [Vercel](https://vercel.com) (site statique). La 
 | Plateforme | Actions |
 |------------|---------|
 | **Mobile** | Joystick tactile en bas de l'écran |
+| **PC souris** | Maintiens clic gauche et vise la direction où fuir |
 | **PC clavier** | `Z/Q/S/D`, `W/A/S/D` ou flèches directionnelles |
 | **Menu PC** | `Entrée` ou `Espace` pour lancer / relancer |
 

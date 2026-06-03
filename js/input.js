@@ -1,4 +1,4 @@
-import { keys } from './state.js';
+import { H, W, keys, mouseControl } from './state.js';
 
 export function makeJoy(zoneId) {
   const zone = document.getElementById(zoneId);
@@ -103,4 +103,40 @@ export function initKeyboard() {
     keys[e.key.toLowerCase()] = false;
     keys[e.code] = false;
   });
+}
+
+export function initMouseControls() {
+  const updateMouse = (e) => {
+    const dx = e.clientX - W / 2;
+    const dy = e.clientY - H / 2;
+    const max = Math.max(80, Math.min(W, H) * 0.34);
+    const d = Math.sqrt(dx * dx + dy * dy);
+    const force = Math.min(1, d / max);
+
+    mouseControl.x = e.clientX;
+    mouseControl.y = e.clientY;
+    mouseControl.dx = d > 8 ? (dx / d) * force : 0;
+    mouseControl.dy = d > 8 ? (dy / d) * force : 0;
+  };
+
+  window.addEventListener('pointerdown', (e) => {
+    if (e.button !== 0 || !document.body.classList.contains('playing')) return;
+    mouseControl.active = true;
+    updateMouse(e);
+  });
+
+  window.addEventListener('pointermove', (e) => {
+    if (!mouseControl.active) return;
+    updateMouse(e);
+  });
+
+  const stopMouse = () => {
+    mouseControl.active = false;
+    mouseControl.dx = 0;
+    mouseControl.dy = 0;
+  };
+
+  window.addEventListener('pointerup', stopMouse);
+  window.addEventListener('pointercancel', stopMouse);
+  window.addEventListener('blur', stopMouse);
 }

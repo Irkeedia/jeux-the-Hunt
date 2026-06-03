@@ -16,6 +16,7 @@ import {
   joy,
   keys,
   makeHunter,
+  mouseControl,
   particles,
   player,
   powTimer,
@@ -81,6 +82,10 @@ export function update() {
 
   let ix = joy.dx;
   let iy = joy.dy;
+  if (mouseControl.active) {
+    ix += mouseControl.dx;
+    iy += mouseControl.dy;
+  }
   if (keys.ArrowLeft || keys.a || keys.q || keys.KeyA || keys.KeyQ) ix -= 1;
   if (keys.ArrowRight || keys.d || keys.KeyD) ix += 1;
   if (keys.ArrowUp || keys.w || keys.z || keys.KeyW || keys.KeyZ) iy -= 1;

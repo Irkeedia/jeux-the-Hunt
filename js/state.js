@@ -155,6 +155,13 @@ export let campTriggers = 0;
 
 export let joy = null;
 export const keys = {};
+export const mouseControl = {
+  active: false,
+  dx: 0,
+  dy: 0,
+  x: 0,
+  y: 0,
+};
 
 export let obstacles = [];
 export let specials = [];

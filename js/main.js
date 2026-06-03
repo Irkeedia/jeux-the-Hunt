@@ -1,5 +1,5 @@
 import { setHunters, startGame, update } from './game.js';
-import { initKeyboard, makeJoy } from './input.js';
+import { initKeyboard, initMouseControls, makeJoy } from './input.js';
 import { getPlayerName, initLeaderboardUI } from './leaderboard.js';
 import { drawScene } from './render.js';
 import { gameState, joy, resizeCanvas, setJoy } from './state.js';
@@ -7,6 +7,7 @@ import { initUI, showGameplay } from './ui.js';
 
 function boot() {
   initKeyboard();
+  initMouseControls();
 
   if (!joy) setJoy(makeJoy('joy-main'));
 

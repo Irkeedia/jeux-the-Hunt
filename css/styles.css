@@ -30,6 +30,10 @@ body {
   color: #fff;
 }
 
+body.playing {
+  cursor: crosshair;
+}
+
 canvas {
   display: block;
 }
