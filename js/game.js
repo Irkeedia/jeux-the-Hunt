@@ -9,12 +9,14 @@ import {
   distance,
   elapsed,
   frameCount,
-  gameState,
   generatedCells,
   generatedMazes,
   hunterCount,
   hunters,
   joy,
+  setGameState,
+  setHunterCount,
+  setJoy,
   keys,
   makeHunter,
   obstacles,
@@ -30,7 +32,7 @@ import { explode, getBiomeAt } from './utils.js';
 import { circleBlocked, ensureGenAround, hunterAvoidDir } from './world.js';
 
 export function setHunters(n) {
-  hunterCount = n;
+  setHunterCount(n);
   document.querySelectorAll('.hs-btn').forEach((b) => b.classList.toggle('active', +b.dataset.n === n));
 }
 
@@ -47,7 +49,7 @@ function caught(byWave) {
   shake = 28;
   explode(player.wx, player.wy, 44, byWave ? '#ffaa33' : '#ff3344');
   setTimeout(() => {
-    gameState = 'dead';
+    setGameState('dead');
     const o = document.getElementById('overlay');
     o.classList.remove('hidden');
     o.classList.add('dead');
@@ -63,6 +65,8 @@ function caught(byWave) {
 }
 
 export function update() {
+  if (!joy) return;
+
   frameCount++;
   elapsed += 1 / 60;
   ensureGenAround(player.wx, player.wy);
@@ -351,7 +355,7 @@ export function startGame() {
   player.inMud = false;
   player.baseMAX = 7.2;
   player.MAXSP = 7.2;
-  hunters = [];
+  hunters.length = 0;
   for (let i = 0; i < hunterCount; i++) {
     const h = makeHunter();
     const ang = Math.PI / 2 + (i - (hunterCount - 1) / 2) * 0.7;
@@ -377,10 +381,16 @@ export function startGame() {
   powTimer = 0;
   document.getElementById('powerup-tag').textContent = '';
   ensureGenAround(0, 0);
-  if (!joy) joy = makeJoy('joy-main');
+  if (!joy) setJoy(makeJoy('joy-main'));
   const o = document.getElementById('overlay');
   o.classList.add('hidden');
   o.classList.remove('dead');
+  document.querySelector('.tip').style.display = '';
+  document.getElementById('hunter-select').style.display = 'flex';
+  document.getElementById('btn').textContent = '[ FUIR ]';
+  o.querySelector('h1').textContent = 'THE HUNT';
+  document.getElementById('overlay-msg').innerHTML =
+    'QUELQUE CHOSE TE TRAQUE<br>SURVIS LE PLUS LONGTEMPS POSSIBLE';
   document.getElementById('joy-main').style.display = 'flex';
-  gameState = 'playing';
+  setGameState('playing');
 }

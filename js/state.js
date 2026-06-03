@@ -21,6 +21,18 @@ export function resizeCanvas() {
 }
 
 export let gameState = 'menu';
+
+export function setGameState(value) {
+  gameState = value;
+}
+
+export function setHunterCount(n) {
+  hunterCount = n;
+}
+
+export function setJoy(value) {
+  joy = value;
+}
 export let elapsed = 0;
 export let frameCount = 0;
 export let distance = 0;

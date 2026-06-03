@@ -3,10 +3,15 @@ import { initKeyboard } from './input.js';
 import { drawScene } from './render.js';
 import { gameState, resizeCanvas } from './state.js';
 
-initKeyboard();
+function initUI() {
+  document.getElementById('btn').addEventListener('click', startGame);
+  document.querySelectorAll('.hs-btn').forEach((btn) => {
+    btn.addEventListener('click', () => setHunters(Number(btn.dataset.n)));
+  });
+}
 
-window.setHunters = setHunters;
-window.startGame = startGame;
+initKeyboard();
+initUI();
 
 function loop() {
   requestAnimationFrame(loop);
