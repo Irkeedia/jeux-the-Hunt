@@ -144,7 +144,7 @@ export async function refreshLeaderboard() {
 
 export function showScoreForm(show) {
   const form = document.getElementById('score-form');
-  if (form) form.classList.toggle('hidden', !show);
+  if (form) form.style.display = show ? 'flex' : 'none';
 }
 
 export function initLeaderboardUI() {
@@ -169,7 +169,7 @@ export function initLeaderboardUI() {
     await refreshLeaderboard();
     setTimeout(() => {
       saveBtn.disabled = false;
-      saveBtn.textContent = 'ENREGISTRER LE SCORE';
+      saveBtn.textContent = 'ENREGISTRER';
     }, 1500);
   });
 
@@ -180,10 +180,13 @@ export function onGameOver({ time, distance, hunters }) {
   setLastRun({ time, distance, hunters });
   showScoreForm(true);
   const nameInput = document.getElementById('player-name');
-  if (nameInput && !nameInput.value) nameInput.value = getPlayerName();
+  const nameMenu = document.getElementById('player-name-menu');
+  if (nameInput && !nameInput.value) {
+    nameInput.value = nameMenu?.value?.trim() || getPlayerName();
+  }
+  refreshLeaderboard();
 }
 
-export function onMenuOpen() {
-  showScoreForm(false);
+export function refreshMenuLeaderboard() {
   refreshLeaderboard();
 }

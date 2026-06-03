@@ -1,67 +1,69 @@
 import { CAMP_RADIUS, CAMP_WINDOW, HUNTER_BASE_MAXSP } from './config.js';
-import { onGameOver, onMenuOpen } from './leaderboard.js';
+import { formatTime, onGameOver } from './leaderboard.js';
 import { makeJoy } from './input.js';
 import { drawScene, updateHUD } from './render.js';
 import {
   cam,
   campHistory,
   campTriggers,
+  clearWorld,
   decoy,
   distance,
   elapsed,
   frameCount,
-  generatedCells,
-  generatedMazes,
   hunterCount,
   hunters,
   joy,
-  setGameState,
-  setHunterCount,
-  setJoy,
   keys,
   makeHunter,
-  obstacles,
   particles,
   player,
   powTimer,
+  resetPlayer,
+  resetTimers,
+  setGameState,
+  setHunterCount,
+  setJoy,
+  setPowTimer,
+  setShake,
   shake,
   shockwaves,
   specials,
   waveWarning,
 } from './state.js';
+import { showDeadScreen } from './ui.js';
 import { explode, getBiomeAt } from './utils.js';
 import { circleBlocked, ensureGenAround, hunterAvoidDir } from './world.js';
 
 export function setHunters(n) {
   setHunterCount(n);
-  document.querySelectorAll('.hs-btn').forEach((b) => b.classList.toggle('active', +b.dataset.n === n));
+  document.querySelectorAll('.hs-btn').forEach((b) => {
+    const active = Number(b.dataset.n) === n;
+    b.classList.toggle('active', active);
+    b.setAttribute('aria-pressed', String(active));
+  });
 }
 
 export function showPow(txt, col) {
   const el = document.getElementById('powerup-tag');
   el.textContent = txt;
   el.style.color = col;
-  powTimer = 120;
+  setPowTimer(120);
 }
 
 function caught(byWave) {
   if (player.dead) return;
   player.dead = true;
-  shake = 28;
+  setShake(28);
   explode(player.wx, player.wy, 44, byWave ? '#ffaa33' : '#ff3344');
   setTimeout(() => {
     setGameState('dead');
-    const o = document.getElementById('overlay');
-    o.classList.remove('hidden');
-    o.classList.add('dead');
-    o.querySelector('h1').textContent = byWave ? 'PULVÉRISÉ' : 'ATTRAPÉ';
-    const m = Math.floor(elapsed / 60);
-    const s = Math.floor(elapsed % 60);
-    document.getElementById('overlay-msg').innerHTML =
-      `TU AS SURVÉCU<br>${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}<br>DISTANCE : ${distance}`;
-    document.querySelector('.tip').style.display = 'none';
-    document.getElementById('hunter-select').style.display = 'flex';
-    document.getElementById('btn').textContent = '[ FUIR ENCORE ]';
+    const title = byWave ? 'PULVÉRISÉ' : 'ATTRAPÉ';
+    showDeadScreen({
+      title,
+      timeText: formatTime(elapsed),
+      distance,
+    });
     onGameOver({ time: elapsed, distance, hunters: hunterCount });
   }, 800);
 }
@@ -134,7 +136,7 @@ export function update() {
     if (s.type === 'accel' && d < s.r && player.boost <= 0) {
       player.boost = 55;
       explode(player.wx, player.wy, 18, '#5ad6ff');
-      shake = Math.max(shake, 6);
+      setShake(Math.max(shake, 6));
     } else if (s.type === 'tele' && d < s.r && s.cd <= 0) {
       explode(player.wx, player.wy, 24, s.col);
       player.wx = s.destX;
@@ -143,7 +145,7 @@ export function update() {
       cam.y = player.wy;
       s.cd = 60;
       explode(player.wx, player.wy, 24, s.col);
-      shake = Math.max(shake, 8);
+      setShake(Math.max(shake, 8));
     } else if (s.type === 'blackhole') {
       if (d < s.pull && d > 1) {
         const f = (1 - d / s.pull) * 0.6;
@@ -196,7 +198,7 @@ export function update() {
       for (const h of hunters) {
         shockwaves.push({ wx: h.wx, wy: h.wy, r: 0, maxR: 520, life: 1, speed: 9 });
       }
-      shake = Math.max(shake, 14);
+      setShake(Math.max(shake, 14));
       for (const h of hunters) {
         h.MAXSP = HUNTER_BASE_MAXSP + campTriggers * 0.7;
         h.ACCEL = 0.24 + campTriggers * 0.04;
@@ -314,13 +316,13 @@ export function update() {
 
   cam.x += (player.wx - cam.x) * 0.12;
   cam.y += (player.wy - cam.y) * 0.12;
-  if (shake > 0) shake *= 0.88;
+  if (shake > 0) setShake(shake * 0.88);
 
   const danger = Math.max(0, Math.min(1, 1 - (minHd - 60) / 360));
   const db = document.getElementById('danger-bar');
   db.style.background = `rgba(255,50,68,${danger * 0.9})`;
   db.style.height = `${2 + danger * 5}px`;
-  if (danger > 0.85 && frameCount % 6 === 0) shake = Math.max(shake, danger * 4);
+  if (danger > 0.85 && frameCount % 6 === 0) setShake(Math.max(shake, danger * 4));
 
   particles.forEach((p) => {
     p.wx += p.vx;
@@ -334,7 +336,7 @@ export function update() {
   document.getElementById('biome-tag').textContent = getBiomeAt(player.wx, player.wy).biome.name;
 
   if (powTimer > 0) {
-    powTimer--;
+    setPowTimer(powTimer - 1);
     if (powTimer <= 0) document.getElementById('powerup-tag').textContent = '';
   }
 
@@ -342,22 +344,10 @@ export function update() {
 }
 
 export function startGame() {
-  elapsed = 0;
-  frameCount = 0;
-  distance = 0;
-  player.wx = 0;
-  player.wy = 0;
-  player.vx = 0;
-  player.vy = 0;
-  player.angle = -Math.PI / 2;
-  player.dead = false;
-  player.trail = [];
-  player.boost = 0;
-  player.invis = 0;
-  player.inMud = false;
-  player.baseMAX = 7.2;
-  player.MAXSP = 7.2;
-  hunters.length = 0;
+  resetTimers();
+  resetPlayer();
+  clearWorld();
+
   for (let i = 0; i < hunterCount; i++) {
     const h = makeHunter();
     const ang = Math.PI / 2 + (i - (hunterCount - 1) / 2) * 0.7;
@@ -367,33 +357,9 @@ export function startGame() {
     h.ACCEL = 0.24;
     hunters.push(h);
   }
-  cam.x = 0;
-  cam.y = 0;
-  shake = 0;
-  particles.length = 0;
-  obstacles.length = 0;
-  specials.length = 0;
-  generatedCells.clear();
-  generatedMazes.clear();
-  decoy = null;
-  campHistory.length = 0;
-  waveWarning = 0;
-  shockwaves.length = 0;
-  campTriggers = 0;
-  powTimer = 0;
+
   document.getElementById('powerup-tag').textContent = '';
   ensureGenAround(0, 0);
   if (!joy) setJoy(makeJoy('joy-main'));
-  onMenuOpen();
-  const o = document.getElementById('overlay');
-  o.classList.add('hidden');
-  o.classList.remove('dead');
-  document.querySelector('.tip').style.display = '';
-  document.getElementById('hunter-select').style.display = 'flex';
-  document.getElementById('btn').textContent = '[ FUIR ]';
-  o.querySelector('h1').textContent = 'THE HUNT';
-  document.getElementById('overlay-msg').innerHTML =
-    'QUELQUE CHOSE TE TRAQUE<br>SURVIS LE PLUS LONGTEMPS POSSIBLE';
-  document.getElementById('joy-main').style.display = 'flex';
   setGameState('playing');
 }

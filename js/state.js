@@ -33,11 +33,59 @@ export function setHunterCount(n) {
 export function setJoy(value) {
   joy = value;
 }
+
 export let elapsed = 0;
 export let frameCount = 0;
 export let distance = 0;
 export const cam = { x: 0, y: 0 };
 export let shake = 0;
+
+export function resetTimers() {
+  elapsed = 0;
+  frameCount = 0;
+  distance = 0;
+  shake = 0;
+  powTimer = 0;
+  waveWarning = 0;
+  campTriggers = 0;
+}
+
+export function setShake(v) {
+  shake = v;
+}
+
+export function setPowTimer(v) {
+  powTimer = v;
+}
+
+export function clearWorld() {
+  hunters.length = 0;
+  particles.length = 0;
+  obstacles.length = 0;
+  specials.length = 0;
+  generatedCells.clear();
+  generatedMazes.clear();
+  decoy = null;
+  campHistory.length = 0;
+  shockwaves.length = 0;
+}
+
+export function resetPlayer() {
+  player.wx = 0;
+  player.wy = 0;
+  player.vx = 0;
+  player.vy = 0;
+  player.angle = -Math.PI / 2;
+  player.dead = false;
+  player.trail.length = 0;
+  player.boost = 0;
+  player.invis = 0;
+  player.inMud = false;
+  player.baseMAX = 7.2;
+  player.MAXSP = 7.2;
+  cam.x = 0;
+  cam.y = 0;
+}
 
 export const player = {
   wx: 0,
