@@ -1,0 +1,282 @@
+@import url('https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700;900&display=swap');
+
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+body {
+  background: #000;
+  overflow: hidden;
+  touch-action: none;
+}
+
+canvas {
+  display: block;
+}
+
+#c {
+  position: fixed;
+  inset: 0;
+}
+
+#vignette {
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: 3;
+  background: radial-gradient(ellipse at center, rgba(0, 0, 0, 0) 45%, rgba(0, 0, 0, 0.55) 100%);
+  mix-blend-mode: multiply;
+}
+
+#scanline {
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: 3;
+  opacity: 0.4;
+  background: linear-gradient(rgba(255, 255, 255, 0.015) 50%, rgba(0, 0, 0, 0.04) 50%);
+  background-size: 100% 3px;
+}
+
+#hud {
+  position: fixed;
+  top: 18px;
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  gap: 34px;
+  align-items: center;
+  pointer-events: none;
+  z-index: 5;
+}
+
+.hud-item {
+  text-align: center;
+}
+
+.hud-label {
+  font-family: 'Orbitron', sans-serif;
+  font-size: 8px;
+  letter-spacing: 3px;
+  color: rgba(255, 255, 255, 0.3);
+  text-shadow: 0 1px 3px #000;
+}
+
+.hud-val {
+  font-family: 'Orbitron', sans-serif;
+  font-size: 20px;
+  font-weight: 900;
+  color: #fff;
+  text-shadow: 0 1px 6px #000;
+}
+
+#dist-val {
+  color: #ff5577;
+}
+
+#biome-tag {
+  position: fixed;
+  top: 62px;
+  left: 50%;
+  transform: translateX(-50%);
+  font-family: 'Orbitron', sans-serif;
+  font-size: 9px;
+  letter-spacing: 4px;
+  color: rgba(255, 255, 255, 0.35);
+  z-index: 5;
+  pointer-events: none;
+  text-shadow: 0 1px 4px #000;
+}
+
+#powerup-tag {
+  position: fixed;
+  top: 84px;
+  left: 50%;
+  transform: translateX(-50%);
+  font-family: 'Orbitron', sans-serif;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 2px;
+  z-index: 5;
+  pointer-events: none;
+  text-shadow: 0 1px 4px #000;
+}
+
+#danger-bar {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 3px;
+  background: rgba(255, 50, 68, 0);
+  z-index: 4;
+  pointer-events: none;
+}
+
+#overlay {
+  position: fixed;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  background: rgba(0, 0, 0, 0.9);
+  pointer-events: all;
+  z-index: 20;
+  padding: 20px;
+}
+
+#overlay.hidden {
+  display: none;
+}
+
+#overlay h1 {
+  font-family: 'Orbitron', sans-serif;
+  font-size: clamp(28px, 7vw, 58px);
+  font-weight: 900;
+  color: #fff;
+  letter-spacing: 4px;
+  margin-bottom: 6px;
+  text-shadow: 0 0 40px rgba(255, 255, 255, 0.3);
+}
+
+#overlay.dead h1 {
+  color: #ff3344;
+  text-shadow: 0 0 40px rgba(255, 50, 68, 0.5);
+}
+
+#overlay .sub {
+  font-family: 'Orbitron', sans-serif;
+  font-size: 10px;
+  letter-spacing: 5px;
+  color: rgba(255, 255, 255, 0.25);
+  margin-bottom: 30px;
+}
+
+#overlay .msg {
+  font-family: 'Orbitron', sans-serif;
+  font-size: 12px;
+  letter-spacing: 2px;
+  color: rgba(255, 255, 255, 0.45);
+  text-align: center;
+  line-height: 2.4;
+  margin-bottom: 26px;
+}
+
+#overlay .tip {
+  font-family: 'Orbitron', sans-serif;
+  font-size: 8.5px;
+  letter-spacing: 1px;
+  color: rgba(120, 200, 255, 0.6);
+  margin-bottom: 28px;
+  text-align: center;
+  line-height: 2.2;
+  max-width: 420px;
+}
+
+#btn {
+  font-family: 'Orbitron', sans-serif;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 4px;
+  padding: 15px 46px;
+  background: transparent;
+  border: 1px solid rgba(255, 255, 255, 0.4);
+  color: #fff;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+#btn:hover,
+#btn:active {
+  background: rgba(255, 255, 255, 0.08);
+  box-shadow: 0 0 24px rgba(255, 255, 255, 0.15);
+}
+
+#hunter-select {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 30px;
+}
+
+#hunter-select .hs-label {
+  font-family: 'Orbitron', sans-serif;
+  font-size: 8px;
+  letter-spacing: 3px;
+  color: rgba(255, 255, 255, 0.3);
+}
+
+.hs-opts {
+  display: flex;
+  gap: 12px;
+}
+
+.hs-btn {
+  font-family: 'Orbitron', sans-serif;
+  font-size: 18px;
+  font-weight: 900;
+  width: 54px;
+  height: 54px;
+  background: transparent;
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  color: rgba(255, 255, 255, 0.4);
+  cursor: pointer;
+  transition: all 0.2s;
+  border-radius: 6px;
+}
+
+.hs-btn.active {
+  border-color: rgba(255, 80, 100, 0.8);
+  color: #ff5577;
+  background: rgba(255, 80, 100, 0.08);
+  box-shadow: 0 0 18px rgba(255, 80, 100, 0.25);
+}
+
+.joy-zone {
+  position: fixed;
+  bottom: 34px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 150px;
+  height: 150px;
+  pointer-events: all;
+  z-index: 10;
+}
+
+.joy-base {
+  width: 150px;
+  height: 150px;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  position: relative;
+}
+
+.joy-knob {
+  width: 58px;
+  height: 58px;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.16);
+  border: 1px solid rgba(255, 255, 255, 0.35);
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  pointer-events: none;
+}
+
+.joy-label {
+  position: absolute;
+  bottom: -22px;
+  left: 50%;
+  transform: translateX(-50%);
+  font-family: 'Orbitron', sans-serif;
+  font-size: 8px;
+  letter-spacing: 2px;
+  color: rgba(255, 255, 255, 0.3);
+  white-space: nowrap;
+}

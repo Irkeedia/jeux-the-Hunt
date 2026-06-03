@@ -1,0 +1,60 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+  <meta name="description" content="THE HUNT — Jeu de survie et poursuite dans l'espace. Fuis les prédateurs le plus longtemps possible.">
+  <title>THE HUNT</title>
+  <link rel="stylesheet" href="css/styles.css">
+</head>
+<body>
+  <canvas id="c"></canvas>
+  <div id="vignette"></div>
+  <div id="scanline"></div>
+  <div id="danger-bar"></div>
+
+  <div id="hud">
+    <div class="hud-item">
+      <div class="hud-label">SURVIE</div>
+      <div class="hud-val" id="time-val">00:00</div>
+    </div>
+    <div class="hud-item">
+      <div class="hud-label">DISTANCE</div>
+      <div class="hud-val" id="dist-val">0</div>
+    </div>
+  </div>
+  <div id="biome-tag"></div>
+  <div id="powerup-tag"></div>
+
+  <div id="overlay">
+    <h1>THE HUNT</h1>
+    <div class="sub">SURVIE · POURSUITE</div>
+    <div class="msg" id="overlay-msg">
+      QUELQUE CHOSE TE TRAQUE<br>
+      SURVIS LE PLUS LONGTEMPS POSSIBLE
+    </div>
+    <div class="tip">
+      ⚡ BOOST BLEU : accélération · ⬡ TÉLÉPORTEUR violet<br>
+      ● TROU NOIR : aspire tout · ◇ CHAMP VERT : repousse l'ennemi<br>
+      ★ BONUS : leurre / invisibilité / vitesse · ▒ BOUE : ralentit<br>
+      ⚠ NE TOURNE PAS EN ROND : onde destructrice
+    </div>
+    <div id="hunter-select">
+      <div class="hs-label">NOMBRE DE PRÉDATEURS</div>
+      <div class="hs-opts">
+        <button type="button" class="hs-btn active" data-n="1" onclick="setHunters(1)">1</button>
+        <button type="button" class="hs-btn" data-n="2" onclick="setHunters(2)">2</button>
+        <button type="button" class="hs-btn" data-n="3" onclick="setHunters(3)">3</button>
+      </div>
+    </div>
+    <button type="button" id="btn" onclick="startGame()">[ FUIR ]</button>
+  </div>
+
+  <div class="joy-zone" id="joy-main" style="display:none;">
+    <div class="joy-base"><div class="joy-knob"></div></div>
+    <div class="joy-label">FUIR</div>
+  </div>
+
+  <script type="module" src="js/main.js"></script>
+</body>
+</html>
