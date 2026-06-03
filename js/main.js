@@ -1,5 +1,6 @@
 import { setHunters, startGame, update } from './game.js';
 import { initKeyboard } from './input.js';
+import { initLeaderboardUI } from './leaderboard.js';
 import { drawScene } from './render.js';
 import { gameState, resizeCanvas } from './state.js';
 
@@ -12,6 +13,7 @@ function initUI() {
 
 initKeyboard();
 initUI();
+initLeaderboardUI();
 
 function loop() {
   requestAnimationFrame(loop);

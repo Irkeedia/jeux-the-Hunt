@@ -39,6 +39,11 @@
       ★ BONUS : leurre / invisibilité / vitesse · ▒ BOUE : ralentit<br>
       ⚠ NE TOURNE PAS EN ROND : onde destructrice
     </div>
+    <div id="leaderboard-panel">
+      <div class="lb-title">TOP CHASSEURS</div>
+      <p class="lb-hint" id="leaderboard-hint"></p>
+      <ol id="leaderboard-list" class="lb-list"></ol>
+    </div>
     <div id="hunter-select">
       <div class="hs-label">NOMBRE DE PRÉDATEURS</div>
       <div class="hs-opts">
@@ -46,6 +51,11 @@
         <button type="button" class="hs-btn" data-n="2">2</button>
         <button type="button" class="hs-btn" data-n="3">3</button>
       </div>
+    </div>
+    <div id="score-form" class="hidden">
+      <div class="sf-label">ENREGISTRER TON RECORD</div>
+      <input type="text" id="player-name" maxlength="16" placeholder="Ton pseudo" autocomplete="nickname">
+      <button type="button" id="save-score">ENREGISTRER LE SCORE</button>
     </div>
     <button type="button" id="btn">[ FUIR ]</button>
   </div>

@@ -1,4 +1,5 @@
 import { CAMP_RADIUS, CAMP_WINDOW, HUNTER_BASE_MAXSP } from './config.js';
+import { onGameOver, onMenuOpen } from './leaderboard.js';
 import { makeJoy } from './input.js';
 import { drawScene, updateHUD } from './render.js';
 import {
@@ -61,6 +62,7 @@ function caught(byWave) {
     document.querySelector('.tip').style.display = 'none';
     document.getElementById('hunter-select').style.display = 'flex';
     document.getElementById('btn').textContent = '[ FUIR ENCORE ]';
+    onGameOver({ time: elapsed, distance, hunters: hunterCount });
   }, 800);
 }
 
@@ -382,6 +384,7 @@ export function startGame() {
   document.getElementById('powerup-tag').textContent = '';
   ensureGenAround(0, 0);
   if (!joy) setJoy(makeJoy('joy-main'));
+  onMenuOpen();
   const o = document.getElementById('overlay');
   o.classList.add('hidden');
   o.classList.remove('dead');

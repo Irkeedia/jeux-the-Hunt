@@ -25,37 +25,60 @@ Au menu, choisis le nombre de prédateurs (1 à 3), puis clique sur **[ FUIR ]**
 - **Bonus** — leurre, invisibilité, vitesse permanente
 - **Camping** — rester dans une petite zone déclenche une onde destructrice
 
+## Classement et scores
+
+Le jeu enregistre les **meilleurs scores** (pseudo, temps de survie, distance, nombre de prédateurs).
+
+| Mode | Stockage |
+|------|----------|
+| **Production Vercel** | [Upstash Redis](https://vercel.com/marketplace?category=storage&search=redis) (classement partagé) |
+| **Sans Redis / dev simple** | Mémoire serveur + secours **localStorage** dans le navigateur |
+
+**Points** = `temps (s) × 100 + distance`
+
+### Activer Redis sur Vercel (recommandé)
+
+1. Dashboard Vercel → ton projet → **Storage** / **Marketplace** → **Upstash Redis**
+2. Installe et lie l’intégration au projet (`UPSTASH_REDIS_REST_URL` et `UPSTASH_REDIS_REST_TOKEN` sont ajoutés)
+3. Redéploie le projet
+
+Sans Redis, l’API tourne en mémoire (scores perdus au redémarrage) ; le navigateur garde aussi une copie locale.
+
 ## Structure du projet
 
 ```
 .
-├── index.html          # Point d'entrée (requis pour Vercel)
-├── css/
-│   └── styles.css      # Interface et HUD
+├── index.html
+├── api/
+│   ├── scores.js       # API GET/POST classement
+│   └── lib/store.js    # Accès Redis (Upstash)
+├── css/styles.css
 ├── js/
-│   ├── main.js         # Boucle de jeu et initialisation
-│   ├── config.js       # Constantes et biomes
-│   ├── state.js        # État global (canvas, joueur, monde)
-│   ├── utils.js        # Utilitaires (RNG, biomes, particules)
-│   ├── world.js        # Génération procédurale et collisions
-│   ├── input.js        # Joystick et clavier
-│   ├── game.js         # Logique de jeu (update, mort, démarrage)
-│   └── render.js       # Rendu Canvas et bloom
+│   ├── main.js
+│   ├── game.js
+│   ├── leaderboard.js  # UI + appels API
+│   └── …
+├── package.json
 ├── vercel.json
 └── README.md
 ```
 
 ## Développement local
 
-Aucune installation requise. Sert le projet avec un serveur HTTP local (les modules ES nécessitent HTTP, pas `file://`) :
+**Jeu seul** (sans API scores) :
 
 ```bash
 npx serve .
-# ou
-python3 -m http.server 8080
 ```
 
-Puis ouvre `http://localhost:8080`.
+**Jeu + API + KV** (comme en production) :
+
+```bash
+npm install
+npx vercel dev
+```
+
+Le pseudo est mémorisé dans le navigateur (`localStorage`). Les scores utilisent l’API si disponible, sinon le stockage local.
 
 ## Déploiement Vercel
 
