@@ -89,9 +89,18 @@ export function makeJoy(zoneId) {
 export function initKeyboard() {
   window.addEventListener('keydown', (e) => {
     keys[e.key] = true;
-    if (['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'].includes(e.key)) e.preventDefault();
+    keys[e.key.toLowerCase()] = true;
+    keys[e.code] = true;
+    if (
+      ['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'Space'].includes(e.code) ||
+      ['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', ' '].includes(e.key)
+    ) {
+      e.preventDefault();
+    }
   });
   window.addEventListener('keyup', (e) => {
     keys[e.key] = false;
+    keys[e.key.toLowerCase()] = false;
+    keys[e.code] = false;
   });
 }

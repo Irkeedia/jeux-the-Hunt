@@ -1,6 +1,7 @@
-const API = '/api/scores';
 const NAME_KEY = 'the-hunt:player-name';
-const LOCAL_KEY = 'the-hunt:local-scores';
+const DB_NAME = 'the-hunt-db';
+const DB_VERSION = 1;
+const STORE = 'scores';
 
 let lastRun = null;
 
@@ -24,32 +25,63 @@ export function getLastRun() {
   return lastRun;
 }
 
-function readLocalScores() {
-  try {
-    return JSON.parse(localStorage.getItem(LOCAL_KEY) || '[]');
-  } catch {
-    return [];
-  }
+function openDb() {
+  return new Promise((resolve, reject) => {
+    const req = indexedDB.open(DB_NAME, DB_VERSION);
+    req.onupgradeneeded = () => {
+      const db = req.result;
+      if (!db.objectStoreNames.contains(STORE)) {
+        const store = db.createObjectStore(STORE, { keyPath: 'id' });
+        store.createIndex('points', 'points');
+        store.createIndex('createdAt', 'createdAt');
+      }
+    };
+    req.onsuccess = () => resolve(req.result);
+    req.onerror = () => reject(req.error);
+  });
 }
 
-function writeLocalScores(rows) {
-  localStorage.setItem(LOCAL_KEY, JSON.stringify(rows.slice(0, 50)));
+async function withStore(mode, fn) {
+  const db = await openDb();
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction(STORE, mode);
+    const store = tx.objectStore(STORE);
+    const result = fn(store);
+    tx.oncomplete = () => {
+      db.close();
+      resolve(result);
+    };
+    tx.onerror = () => {
+      db.close();
+      reject(tx.error);
+    };
+  });
 }
 
-function addLocalScore(entry) {
-  const rows = readLocalScores();
-  rows.push(entry);
-  rows.sort((a, b) => b.points - a.points);
-  writeLocalScores(rows);
-  const rank = rows.findIndex((r) => r.id === entry.id) + 1;
-  return { rank, total: rows.length, storage: 'local' };
-}
+async function listBrowserScores(limit) {
+  const scores = await withStore('readonly', (store) => {
+    const rows = [];
+    store.openCursor().onsuccess = (event) => {
+      const cursor = event.target.result;
+      if (!cursor) return;
+      rows.push(cursor.value);
+      cursor.continue();
+    };
+    return rows;
+  });
 
-function listLocalScores(limit) {
-  return readLocalScores()
-    .slice()
-    .sort((a, b) => b.points - a.points)
+  return scores
+    .sort((a, b) => b.points - a.points || new Date(a.createdAt) - new Date(b.createdAt))
     .slice(0, limit);
+}
+
+async function addBrowserScore(entry) {
+  await withStore('readwrite', (store) => {
+    store.put(entry);
+  });
+  const rows = await listBrowserScores(50);
+  const rank = rows.findIndex((r) => r.id === entry.id) + 1;
+  return { rank, total: rows.length, storage: 'browser' };
 }
 
 export function formatTime(sec) {
@@ -60,27 +92,20 @@ export function formatTime(sec) {
 
 export function formatRow(row, index) {
   const time = formatTime(row.time);
-  return `${index + 1}. ${row.name} — ${time} · ${row.distance} u. (${row.hunters}×) · ${row.points} pts`;
-}
-
-async function fetchRemote(limit) {
-  const res = await fetch(`${API}?limit=${limit}`);
-  if (!res.ok) throw new Error('API indisponible');
-  const data = await res.json();
-  return { scores: data.scores || [], storage: data.storage || 'remote' };
+  return `${index + 1}. ${row.name} · ${row.points} pts · ${time} · ${row.distance}m · x${row.hunters}`;
 }
 
 export async function loadLeaderboard(limit = 10) {
   try {
-    return await fetchRemote(limit);
+    return { scores: await listBrowserScores(limit), storage: 'browser' };
   } catch {
-    return { scores: listLocalScores(limit), storage: 'local' };
+    return { scores: [], storage: 'unavailable' };
   }
 }
 
 export async function submitScore({ name, time, distance, hunters }) {
   const entry = {
-    id: `local-${Date.now()}`,
+    id: `score-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
     name: (name || 'Anonyme').trim().slice(0, 16) || 'Anonyme',
     time,
     distance: Math.floor(distance),
@@ -92,22 +117,9 @@ export async function submitScore({ name, time, distance, hunters }) {
   setPlayerName(entry.name);
 
   try {
-    const res = await fetch(API, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        name: entry.name,
-        time: entry.time,
-        distance: entry.distance,
-        hunters: entry.hunters,
-      }),
-    });
-    if (!res.ok) throw new Error('Échec enregistrement');
-    const data = await res.json();
-    addLocalScore(data.entry || entry);
-    return data;
+    return await addBrowserScore(entry);
   } catch {
-    return addLocalScore(entry);
+    return { rank: null, total: 0, storage: 'unavailable' };
   }
 }
 
@@ -129,11 +141,9 @@ export function renderLeaderboardList(scores, storage) {
 
   if (hint) {
     hint.textContent =
-      storage === 'redis'
-        ? 'Classement en ligne (Redis Vercel)'
-        : storage === 'local' || storage === 'memory'
-          ? 'Classement local (API non connectée ou dev)'
-          : 'Classement';
+      storage === 'browser'
+        ? 'Sauvegarde dans ce navigateur'
+        : 'Sauvegarde indisponible sur ce navigateur';
   }
 }
 

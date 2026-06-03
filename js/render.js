@@ -289,13 +289,13 @@ function drawArrow(ent, color, glow) {
   const ps = ws(ent.wx, ent.wy);
   const rgbMatch = color.match(/\d+/g);
   const rgb = rgbMatch ? `${rgbMatch[0]},${rgbMatch[1]},${rgbMatch[2]}` : '255,255,255';
-  const halo = ctx.createRadialGradient(ps.x, ps.y, 0, ps.x, ps.y, ent.r * 3.2);
-  halo.addColorStop(0, `rgba(${rgb},0.5)`);
-  halo.addColorStop(0.5, `rgba(${rgb},0.12)`);
+  const halo = ctx.createRadialGradient(ps.x, ps.y, 0, ps.x, ps.y, ent.r * 4.4);
+  halo.addColorStop(0, `rgba(${rgb},0.6)`);
+  halo.addColorStop(0.45, `rgba(${rgb},0.16)`);
   halo.addColorStop(1, `rgba(${rgb},0)`);
   ctx.fillStyle = halo;
   ctx.beginPath();
-  ctx.arc(ps.x, ps.y, ent.r * 3.2, 0, Math.PI * 2);
+  ctx.arc(ps.x, ps.y, ent.r * 4.4, 0, Math.PI * 2);
   ctx.fill();
 
   ctx.save();
@@ -304,30 +304,41 @@ function drawArrow(ent, color, glow) {
   ctx.shadowBlur = glow;
   ctx.shadowColor = color;
   ctx.strokeStyle = color;
-  ctx.lineWidth = 3;
+  ctx.lineWidth = 2.5;
   ctx.lineJoin = 'round';
   ctx.lineCap = 'round';
   const s = ent.r;
-  const fillGrad = ctx.createLinearGradient(0, -s * 1.15, 0, s * 0.95);
-  fillGrad.addColorStop(0, `rgba(${rgb},0.55)`);
-  fillGrad.addColorStop(1, `rgba(${rgb},0.08)`);
+
+  const fillGrad = ctx.createLinearGradient(0, -s * 1.25, 0, s * 1.05);
+  fillGrad.addColorStop(0, `rgba(255,255,255,0.9)`);
+  fillGrad.addColorStop(0.18, `rgba(${rgb},0.72)`);
+  fillGrad.addColorStop(1, `rgba(${rgb},0.18)`);
   ctx.fillStyle = fillGrad;
+
+  // Forme plus ronde et lisible qu'une simple flèche.
   ctx.beginPath();
-  ctx.moveTo(0, -s * 1.15);
-  ctx.quadraticCurveTo(s * 0.9, s * 0.55, s * 0.62, s * 0.7);
-  ctx.quadraticCurveTo(s * 0.22, s * 0.45, 0, s * 0.95);
-  ctx.quadraticCurveTo(-s * 0.22, s * 0.45, -s * 0.62, s * 0.7);
-  ctx.quadraticCurveTo(-s * 0.9, s * 0.55, 0, -s * 1.15);
+  ctx.moveTo(0, -s * 1.28);
+  ctx.bezierCurveTo(s * 0.95, -s * 0.68, s * 1.08, s * 0.38, s * 0.46, s * 0.86);
+  ctx.bezierCurveTo(s * 0.2, s * 1.06, -s * 0.2, s * 1.06, -s * 0.46, s * 0.86);
+  ctx.bezierCurveTo(-s * 1.08, s * 0.38, -s * 0.95, -s * 0.68, 0, -s * 1.28);
   ctx.closePath();
   ctx.fill();
   ctx.stroke();
-  ctx.strokeStyle = 'rgba(255,255,255,0.85)';
-  ctx.lineWidth = 1.5;
-  ctx.shadowBlur = glow * 0.5;
+
+  ctx.shadowBlur = glow * 0.35;
+  ctx.strokeStyle = 'rgba(255,255,255,0.72)';
+  ctx.lineWidth = 1.4;
   ctx.beginPath();
-  ctx.moveTo(0, -s * 0.9);
-  ctx.lineTo(0, s * 0.5);
+  ctx.moveTo(0, -s * 0.88);
+  ctx.quadraticCurveTo(s * 0.12, -s * 0.08, 0, s * 0.52);
   ctx.stroke();
+
+  ctx.fillStyle = `rgba(${rgb},0.95)`;
+  ctx.shadowBlur = glow * 0.45;
+  ctx.beginPath();
+  ctx.arc(0, -s * 0.12, s * 0.22, 0, Math.PI * 2);
+  ctx.fill();
+
   ctx.restore();
 }
 

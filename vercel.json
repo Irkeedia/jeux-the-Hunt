@@ -1,8 +1,3 @@
 {
-  "cleanUrls": true,
-  "functions": {
-    "api/scores.js": {
-      "maxDuration": 10
-    }
-  }
+  "cleanUrls": true
 }

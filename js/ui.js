@@ -66,5 +66,17 @@ export function initUI({ onPlay, onHuntersChange }) {
     });
   }
 
+  const retryBtn = document.getElementById('btn-retry');
+  retryBtn?.addEventListener('click', onPlay);
+
+  window.addEventListener('keydown', (e) => {
+    const isLaunchKey = e.code === 'Enter' || e.code === 'Space';
+    if (!isLaunchKey || document.body.classList.contains('playing')) return;
+    const active = document.activeElement;
+    if (active?.tagName === 'INPUT') return;
+    e.preventDefault();
+    onPlay();
+  });
+
   showMenu();
 }

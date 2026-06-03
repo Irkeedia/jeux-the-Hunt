@@ -81,10 +81,10 @@ export function update() {
 
   let ix = joy.dx;
   let iy = joy.dy;
-  if (keys.ArrowLeft || keys.a) ix -= 1;
-  if (keys.ArrowRight || keys.d) ix += 1;
-  if (keys.ArrowUp || keys.w) iy -= 1;
-  if (keys.ArrowDown || keys.s) iy += 1;
+  if (keys.ArrowLeft || keys.a || keys.q || keys.KeyA || keys.KeyQ) ix -= 1;
+  if (keys.ArrowRight || keys.d || keys.KeyD) ix += 1;
+  if (keys.ArrowUp || keys.w || keys.z || keys.KeyW || keys.KeyZ) iy -= 1;
+  if (keys.ArrowDown || keys.s || keys.KeyS) iy += 1;
   const mag = Math.sqrt(ix * ix + iy * iy);
   if (mag > 0.15) {
     const dir = Math.atan2(iy, ix);

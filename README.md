@@ -11,7 +11,8 @@ Déploie le dossier racine sur [Vercel](https://vercel.com) (site statique). La 
 | Plateforme | Actions |
 |------------|---------|
 | **Mobile** | Joystick tactile en bas de l'écran |
-| **Clavier** | `Z/Q/S/D` ou flèches directionnelles |
+| **PC clavier** | `Z/Q/S/D`, `W/A/S/D` ou flèches directionnelles |
+| **Menu PC** | `Entrée` ou `Espace` pour lancer / relancer |
 
 Au menu, choisis le nombre de prédateurs (1 à 3), puis clique sur **[ FUIR ]**.
 
@@ -31,54 +32,34 @@ Le jeu enregistre les **meilleurs scores** (pseudo, temps de survie, distance, n
 
 | Mode | Stockage |
 |------|----------|
-| **Production Vercel** | [Upstash Redis](https://vercel.com/marketplace?category=storage&search=redis) (classement partagé) |
-| **Sans Redis / dev simple** | Mémoire serveur + secours **localStorage** dans le navigateur |
+| **Navigateur** | IndexedDB, une petite base intégrée au navigateur |
 
 **Points** = `temps (s) × 100 + distance`
 
-### Activer Redis sur Vercel (recommandé)
-
-1. Dashboard Vercel → ton projet → **Storage** / **Marketplace** → **Upstash Redis**
-2. Installe et lie l’intégration au projet (`UPSTASH_REDIS_REST_URL` et `UPSTASH_REDIS_REST_TOKEN` sont ajoutés)
-3. Redéploie le projet
-
-Sans Redis, l’API tourne en mémoire (scores perdus au redémarrage) ; le navigateur garde aussi une copie locale.
+Le classement ne nécessite pas de serveur : chaque navigateur garde ses records avec IndexedDB. Le pseudo est mémorisé pour éviter de le retaper.
 
 ## Structure du projet
 
 ```
 .
 ├── index.html
-├── api/
-│   ├── scores.js       # API GET/POST classement
-│   └── lib/store.js    # Accès Redis (Upstash)
 ├── css/styles.css
 ├── js/
 │   ├── main.js
 │   ├── game.js
-│   ├── leaderboard.js  # UI + appels API
+│   ├── leaderboard.js  # Classement IndexedDB
 │   └── …
-├── package.json
 ├── vercel.json
 └── README.md
 ```
 
 ## Développement local
 
-**Jeu seul** (sans API scores) :
-
 ```bash
 npx serve .
 ```
 
-**Jeu + API + KV** (comme en production) :
-
-```bash
-npm install
-npx vercel dev
-```
-
-Le pseudo est mémorisé dans le navigateur (`localStorage`). Les scores utilisent l’API si disponible, sinon le stockage local.
+Les scores sont enregistrés par le navigateur via IndexedDB.
 
 ## Déploiement Vercel
 

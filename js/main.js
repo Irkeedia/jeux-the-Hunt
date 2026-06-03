@@ -33,14 +33,6 @@ function boot() {
     onHuntersChange: setHunters,
   });
 
-  document.getElementById('btn-retry')?.addEventListener('click', () => {
-    try {
-      startGame();
-      showGameplay();
-    } catch (err) {
-      console.error('Impossible de relancer:', err);
-    }
-  });
 
   initLeaderboardUI();
 }
