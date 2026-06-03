@@ -58,6 +58,27 @@ export function setPowTimer(v) {
   powTimer = v;
 }
 
+export function tickFrame() {
+  frameCount++;
+  elapsed += 1 / 60;
+}
+
+export function setDistance(v) {
+  distance = v;
+}
+
+export function setDecoy(value) {
+  decoy = value;
+}
+
+export function setWaveWarning(value) {
+  waveWarning = value;
+}
+
+export function bumpCampTriggers() {
+  campTriggers++;
+}
+
 export function clearWorld() {
   hunters.length = 0;
   particles.length = 0;

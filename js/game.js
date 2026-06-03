@@ -21,14 +21,19 @@ import {
   powTimer,
   resetPlayer,
   resetTimers,
+  bumpCampTriggers,
+  setDecoy,
+  setDistance,
   setGameState,
   setHunterCount,
   setJoy,
   setPowTimer,
   setShake,
+  setWaveWarning,
   shake,
   shockwaves,
   specials,
+  tickFrame,
   waveWarning,
 } from './state.js';
 import { showDeadScreen } from './ui.js';
@@ -71,8 +76,7 @@ function caught(byWave) {
 export function update() {
   if (!joy) return;
 
-  frameCount++;
-  elapsed += 1 / 60;
+  tickFrame();
   ensureGenAround(player.wx, player.wy);
 
   let ix = joy.dx;
@@ -128,7 +132,7 @@ export function update() {
 
   player.trail.unshift({ wx: player.wx, wy: player.wy });
   if (player.trail.length > 22) player.trail.pop();
-  distance = Math.round(Math.sqrt(player.wx ** 2 + player.wy ** 2) / 10);
+  setDistance(Math.round(Math.sqrt(player.wx ** 2 + player.wy ** 2) / 10));
 
   player.inMud = false;
   for (const s of specials) {
@@ -159,7 +163,7 @@ export function update() {
       s.taken = true;
       explode(s.wx, s.wy, 20, '#ffe066');
       if (s.bonus === 'decoy') {
-        decoy = { wx: player.wx, wy: player.wy, life: 240 };
+        setDecoy({ wx: player.wx, wy: player.wy, life: 240 });
         showPow('LEURRE DÉPLOYÉ', '#ffe066');
       } else if (s.bonus === 'invis') {
         player.invis = 240;
@@ -189,12 +193,12 @@ export function update() {
       const dist = Math.sqrt((p.wx - cx) ** 2 + (p.wy - cy) ** 2);
       if (dist > maxR) maxR = dist;
     }
-    if (maxR < CAMP_RADIUS) waveWarning = 90;
+    if (maxR < CAMP_RADIUS) setWaveWarning(90);
   }
   if (waveWarning > 0) {
-    waveWarning--;
+    setWaveWarning(waveWarning - 1);
     if (waveWarning === 0) {
-      campTriggers++;
+      bumpCampTriggers();
       for (const h of hunters) {
         shockwaves.push({ wx: h.wx, wy: h.wy, r: 0, maxR: 520, life: 1, speed: 9 });
       }
@@ -219,7 +223,7 @@ export function update() {
 
   if (decoy) {
     decoy.life--;
-    if (decoy.life <= 0) decoy = null;
+    if (decoy.life <= 0) setDecoy(null);
   }
 
   let minHd = Infinity;
