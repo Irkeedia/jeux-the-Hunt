@@ -60,19 +60,39 @@
           <label class="field-label" for="player-name-menu">PILOTE</label>
           <input type="text" id="player-name-menu" maxlength="16" placeholder="Entre ton pseudo" autocomplete="nickname">
 
+          <label class="field-label">MODE DE JEU</label>
+          <div class="mode-opts" role="group" aria-label="Mode de jeu">
+            <button type="button" class="mode-btn active" data-mode="classic" aria-pressed="true">
+              <span class="mode-name">TRAQUEURS</span>
+              <span class="mode-desc">Agiles · rusés · obstacles</span>
+            </button>
+            <button type="button" class="mode-btn" data-mode="titan" aria-pressed="false">
+              <span class="mode-name">TITANS</span>
+              <span class="mode-desc">Lents · implacables · zone ouverte</span>
+            </button>
+          </div>
+
           <label class="field-label">MENACE</label>
-          <div class="hs-opts" role="group" aria-label="Nombre de prédateurs">
+          <div class="hs-opts" role="group" aria-label="Nombre d'ennemis">
             <button type="button" class="hs-btn active" data-n="1" aria-pressed="true">
               <span class="hs-num">1</span>
-              <span class="hs-cap">Traqueur</span>
+              <span class="hs-cap">Solo</span>
             </button>
             <button type="button" class="hs-btn" data-n="2" aria-pressed="false">
               <span class="hs-num">2</span>
-              <span class="hs-cap">Meute</span>
+              <span class="hs-cap">Duo</span>
             </button>
             <button type="button" class="hs-btn" data-n="3" aria-pressed="false">
               <span class="hs-num">3</span>
-              <span class="hs-cap">Essaim</span>
+              <span class="hs-cap">Trio</span>
+            </button>
+            <button type="button" class="hs-btn" data-n="4" aria-pressed="false">
+              <span class="hs-num">4</span>
+              <span class="hs-cap">Meute</span>
+            </button>
+            <button type="button" class="hs-btn" data-n="5" aria-pressed="false">
+              <span class="hs-num">5</span>
+              <span class="hs-cap">Horde</span>
             </button>
           </div>
 
@@ -140,6 +160,7 @@
       <button type="button" id="btn-retry" class="btn-play btn-play-retry">
         <span class="btn-play-text">RELANCER</span>
       </button>
+      <button type="button" id="btn-home" class="btn-secondary btn-home">RETOUR AU MENU</button>
     </div>
   </div>
 

@@ -1,4 +1,4 @@
-import { CAMP_RADIUS, CAMP_WINDOW, HUNTER_BASE_MAXSP, MONSTER_AGGRO } from './config.js';
+import { CAMP_RADIUS, CAMP_WINDOW, MONSTER_AGGRO } from './config.js';
 import { formatTime, onGameOver } from './leaderboard.js';
 import { makeJoy } from './input.js';
 import { drawScene, updateHUD } from './render.js';
@@ -7,10 +7,13 @@ import {
   campHistory,
   campTriggers,
   clearWorld,
+  currentBiomeName,
+  decBiomeFlash,
   decoy,
   distance,
   elapsed,
   frameCount,
+  gameMode,
   hunterCount,
   hunters,
   joy,
@@ -24,6 +27,7 @@ import {
   resetPlayer,
   resetTimers,
   bumpCampTriggers,
+  setCurrentBiomeName,
   setDecoy,
   setDistance,
   setGameState,
@@ -38,6 +42,7 @@ import {
   spawn,
   specials,
   tickFrame,
+  triggerBiomeFlash,
   waveWarning,
 } from './state.js';
 import { showDeadScreen } from './ui.js';
@@ -201,8 +206,8 @@ export function update() {
       }
       setShake(Math.max(shake, 14));
       for (const h of hunters) {
-        h.MAXSP = HUNTER_BASE_MAXSP + campTriggers * 0.7;
-        h.ACCEL = 0.24 + campTriggers * 0.04;
+        h.MAXSP = h.baseMAXSP + campTriggers * 0.7;
+        h.ACCEL = h.baseACCEL + campTriggers * 0.04;
       }
       campHistory.length = 0;
     }
@@ -245,26 +250,31 @@ export function update() {
       hunter.vx += Math.cos(desiredDir) * hunter.ACCEL;
       hunter.vy += Math.sin(desiredDir) * hunter.ACCEL;
 
-      for (const s of specials) {
-        if (s.type !== 'field') continue;
-        const dd = Math.sqrt((hunter.wx - s.wx) ** 2 + (hunter.wy - s.wy) ** 2);
-        if (dd < s.r && dd > 1) {
-          const f = (1 - dd / s.r) * 0.9;
-          hunter.vx += ((hunter.wx - s.wx) / dd) * f;
-          hunter.vy += ((hunter.wy - s.wy) / dd) * f;
+      // Les titans sont implacables : ni repoussés par le champ, ni stoppés
+      // par les trous noirs.
+      const relentless = hunter.type === 'titan';
+      if (!relentless) {
+        for (const s of specials) {
+          if (s.type !== 'field') continue;
+          const dd = Math.sqrt((hunter.wx - s.wx) ** 2 + (hunter.wy - s.wy) ** 2);
+          if (dd < s.r && dd > 1) {
+            const f = (1 - dd / s.r) * 0.9;
+            hunter.vx += ((hunter.wx - s.wx) / dd) * f;
+            hunter.vy += ((hunter.wy - s.wy) / dd) * f;
+          }
         }
-      }
-      for (const s of specials) {
-        if (s.type !== 'blackhole') continue;
-        const dd = Math.sqrt((hunter.wx - s.wx) ** 2 + (hunter.wy - s.wy) ** 2);
-        if (dd < s.pull && dd > 1) {
-          const f = (1 - dd / s.pull) * 0.5;
-          hunter.vx += ((s.wx - hunter.wx) / dd) * f;
-          hunter.vy += ((s.wy - hunter.wy) / dd) * f;
-        }
-        if (dd < s.r * 0.6) {
-          hunter.stun = 40;
-          explode(hunter.wx, hunter.wy, 10, '#8844ff');
+        for (const s of specials) {
+          if (s.type !== 'blackhole') continue;
+          const dd = Math.sqrt((hunter.wx - s.wx) ** 2 + (hunter.wy - s.wy) ** 2);
+          if (dd < s.pull && dd > 1) {
+            const f = (1 - dd / s.pull) * 0.5;
+            hunter.vx += ((s.wx - hunter.wx) / dd) * f;
+            hunter.vy += ((s.wy - hunter.wy) / dd) * f;
+          }
+          if (dd < s.r * 0.6) {
+            hunter.stun = 40;
+            explode(hunter.wx, hunter.wy, 10, '#8844ff');
+          }
         }
       }
 
@@ -378,7 +388,30 @@ export function update() {
   });
   particles.splice(0, particles.length, ...particles.filter((p) => p.life > 0));
 
-  document.getElementById('biome-tag').textContent = getBiomeAt(player.wx, player.wy).biome.name;
+  const curBiome = getBiomeAt(player.wx, player.wy).biome;
+  if (curBiome.name !== currentBiomeName) {
+    if (currentBiomeName !== '') {
+      triggerBiomeFlash(curBiome.name, curBiome.glow);
+      setShake(Math.max(shake, 11));
+      for (let i = 0; i < 30; i++) {
+        const a = Math.random() * Math.PI * 2;
+        const sp = 2 + Math.random() * 4;
+        particles.push({
+          wx: player.wx + Math.cos(a) * 40,
+          wy: player.wy + Math.sin(a) * 40,
+          vx: Math.cos(a) * sp,
+          vy: Math.sin(a) * sp,
+          life: 1,
+          decay: 0.018 + Math.random() * 0.02,
+          r: 2 + Math.random() * 3,
+          color: curBiome.glow,
+        });
+      }
+    }
+    setCurrentBiomeName(curBiome.name);
+  }
+  decBiomeFlash();
+  document.getElementById('biome-tag').textContent = curBiome.name;
 
   if (powTimer > 0) {
     setPowTimer(powTimer - 1);
@@ -415,13 +448,13 @@ export function startGame() {
   cam.y = sy;
   setSpawn(sx, sy);
 
+  const enemyType = gameMode === 'titan' ? 'titan' : 'hunter';
   for (let i = 0; i < hunterCount; i++) {
-    const h = makeHunter();
+    const h = makeHunter(enemyType);
     const ang = Math.PI / 2 + (i - (hunterCount - 1) / 2) * 0.7;
-    h.wx = sx + Math.cos(ang) * 560;
-    h.wy = sy + Math.sin(ang) * 560;
-    h.MAXSP = HUNTER_BASE_MAXSP;
-    h.ACCEL = 0.24;
+    const ringR = enemyType === 'titan' ? 680 : 560;
+    h.wx = sx + Math.cos(ang) * ringR;
+    h.wy = sy + Math.sin(ang) * ringR;
     hunters.push(h);
   }
 

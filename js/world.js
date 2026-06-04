@@ -1,6 +1,7 @@
 import { CELL, MAZE_GRID, MONSTER_CELL, TELE_COLORS } from './config.js';
 import {
   frameCount,
+  gameMode,
   generatedCells,
   generatedMazes,
   generatedMonsters,
@@ -154,7 +155,7 @@ export function ensureGenAround(wx, wy) {
       const mkey = `${gx},${gy}`;
       if (generatedMazes.has(mkey)) continue;
       generatedMazes.add(mkey);
-      if (seededRand(gx + 50, gy + 50) < 0.28) {
+      if (gameMode !== 'titan' && seededRand(gx + 50, gy + 50) < 0.28) {
         const ox = gx * MAZE_GRID + MAZE_GRID / 2;
         const oy = gy * MAZE_GRID + MAZE_GRID / 2;
         const { biome } = getBiomeAt(ox, oy);
@@ -175,7 +176,9 @@ export function ensureGenAround(wx, wy) {
       const { biome } = getBiomeAt(ox, oy);
       const rot = seededRand(gx + 2, gy + 3) * Math.PI * 2;
 
-      if (r1 < 0.4) {
+      if (gameMode === 'titan' && r1 < 0.4) {
+        // zone ouverte : aucun obstacle physique en mode Titan
+      } else if (r1 < 0.4) {
         const st = seededRand(gx + 11, gy + 7);
         if (st < 0.45) {
           obstacles.push({ type: 'hex', wx: ox, wy: oy, r: 34 + seededRand(gx, gy + 1) * 40, rot, biome });

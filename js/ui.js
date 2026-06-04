@@ -44,7 +44,7 @@ export function showGameplay() {
   document.getElementById('joy-main').style.display = 'flex';
 }
 
-export function initUI({ onPlay, onHuntersChange }) {
+export function initUI({ onPlay, onHuntersChange, onModeChange, onHome }) {
   const playBtn = document.getElementById('btn-play');
   if (playBtn) {
     playBtn.addEventListener('click', (e) => {
@@ -57,6 +57,20 @@ export function initUI({ onPlay, onHuntersChange }) {
   document.querySelectorAll('.hs-btn').forEach((btn) => {
     btn.addEventListener('click', () => onHuntersChange(Number(btn.dataset.n)));
   });
+
+  document.querySelectorAll('.mode-btn').forEach((btn) => {
+    btn.addEventListener('click', () => {
+      document.querySelectorAll('.mode-btn').forEach((b) => {
+        const active = b === btn;
+        b.classList.toggle('active', active);
+        b.setAttribute('aria-pressed', String(active));
+      });
+      onModeChange?.(btn.dataset.mode);
+    });
+  });
+
+  const homeBtn = document.getElementById('btn-home');
+  homeBtn?.addEventListener('click', () => onHome?.());
 
   const nameMenu = document.getElementById('player-name-menu');
   const nameDead = document.getElementById('player-name');

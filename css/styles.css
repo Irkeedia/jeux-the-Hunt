@@ -348,10 +348,62 @@ input[type='text']:focus {
   box-shadow: 0 0 20px var(--accent-soft);
 }
 
+.mode-opts {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+}
+
+.field-label + .mode-opts {
+  margin-bottom: 18px;
+}
+
+.mode-btn {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  min-height: 66px;
+  padding: 12px 10px;
+  font-family: var(--font-display);
+  background: rgba(255, 255, 255, 0.07);
+  border: 1px solid var(--border);
+  border-radius: 18px;
+  color: rgba(255, 255, 255, 0.45);
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.mode-name {
+  font-size: 14px;
+  font-weight: 900;
+  letter-spacing: 1px;
+}
+
+.mode-desc {
+  font-size: 7.5px;
+  letter-spacing: 1px;
+  opacity: 0.7;
+  text-align: center;
+}
+
+.mode-btn:hover {
+  border-color: rgba(255, 255, 255, 0.25);
+  color: rgba(255, 255, 255, 0.85);
+}
+
+.mode-btn.active {
+  border-color: var(--cyan);
+  color: #fff;
+  background: linear-gradient(180deg, rgba(99, 220, 255, 0.22), rgba(99, 220, 255, 0.06));
+  box-shadow: 0 12px 34px rgba(99, 220, 255, 0.18), 0 0 24px rgba(99, 220, 255, 0.3);
+}
+
 .hs-opts {
   display: grid;
-  grid-template-columns: repeat(3, 1fr);
-  gap: 10px;
+  grid-template-columns: repeat(5, 1fr);
+  gap: 8px;
 }
 
 .hs-btn {
@@ -360,26 +412,26 @@ input[type='text']:focus {
   align-items: center;
   justify-content: center;
   gap: 4px;
-  min-height: 82px;
-  padding: 10px 8px;
+  min-height: 64px;
+  padding: 8px 4px;
   font-family: var(--font-display);
   background: rgba(255, 255, 255, 0.07);
   border: 1px solid var(--border);
-  border-radius: 22px;
+  border-radius: 16px;
   color: rgba(255, 255, 255, 0.45);
   cursor: pointer;
   transition: all 0.2s;
 }
 
 .hs-num {
-  font-size: 22px;
+  font-size: 18px;
   font-weight: 900;
   line-height: 1;
 }
 
 .hs-cap {
-  font-size: 8px;
-  letter-spacing: 2px;
+  font-size: 7px;
+  letter-spacing: 1px;
   opacity: 0.7;
 }
 
@@ -501,6 +553,11 @@ input[type='text']:focus {
 .btn-secondary:disabled {
   opacity: 0.5;
   cursor: wait;
+}
+
+.btn-home {
+  width: 100%;
+  margin-top: 12px;
 }
 
 .menu-card-lb {

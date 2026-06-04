@@ -2,8 +2,8 @@ import { setHunters, startGame, update } from './game.js';
 import { initKeyboard, initMouseControls, makeJoy } from './input.js';
 import { getPlayerName, initLeaderboardUI } from './leaderboard.js';
 import { drawScene } from './render.js';
-import { gameState, joy, resizeCanvas, setJoy } from './state.js';
-import { initUI, showGameplay } from './ui.js';
+import { gameState, joy, resizeCanvas, setGameMode, setGameState, setJoy } from './state.js';
+import { initUI, showGameplay, showMenu } from './ui.js';
 
 function boot() {
   initKeyboard();
@@ -32,6 +32,11 @@ function boot() {
       }
     },
     onHuntersChange: setHunters,
+    onModeChange: setGameMode,
+    onHome: () => {
+      setGameState('menu');
+      showMenu();
+    },
   });
 
 

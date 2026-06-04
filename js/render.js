@@ -2,6 +2,9 @@ import { CAM_Y_OFFSET } from './config.js';
 import {
   W,
   H,
+  biomeFlash,
+  biomeFlashGlow,
+  biomeFlashName,
   cam,
   canvas,
   ctx,
@@ -594,12 +597,13 @@ export function drawScene() {
     ctx.fill();
   });
   for (const hunter of hunters) {
+    const trailCol = hunter.type === 'titan' ? '#ff8a2a' : '#ff3344';
     hunter.trail.forEach((t, i) => {
       const p = ws(t.wx, t.wy);
       const a = (1 - i / hunter.trail.length) * 0.25;
       const r = hunter.r * (1 - i / hunter.trail.length) * 0.5;
       ctx.globalAlpha = a;
-      ctx.fillStyle = '#ff3344';
+      ctx.fillStyle = trailCol;
       ctx.beginPath();
       ctx.arc(p.x, p.y, r, 0, Math.PI * 2);
       ctx.fill();
@@ -668,18 +672,44 @@ export function drawScene() {
   ctx.globalAlpha = 1;
 
   for (const hunter of hunters) {
+    const isTitan = hunter.type === 'titan';
     const hs = ws(hunter.wx, hunter.wy);
     const pulseR = hunter.r + 8 + Math.sin(hunter.pulse) * 4;
     ctx.save();
     ctx.globalAlpha = 0.25 + Math.sin(hunter.pulse) * 0.1;
-    ctx.shadowBlur = 25;
-    ctx.shadowColor = '#ff3344';
-    ctx.fillStyle = 'rgba(255,50,68,0.15)';
+    ctx.shadowBlur = isTitan ? 36 : 25;
+    ctx.shadowColor = isTitan ? '#ff8a2a' : '#ff3344';
+    ctx.fillStyle = isTitan ? 'rgba(255,138,42,0.16)' : 'rgba(255,50,68,0.15)';
     ctx.beginPath();
     ctx.arc(hs.x, hs.y, pulseR, 0, Math.PI * 2);
     ctx.fill();
     ctx.restore();
-    drawArrow(hunter, hunter.stun > 0 ? 'rgb(150,100,255)' : 'rgb(255,50,68)', 22);
+
+    if (isTitan) {
+      ctx.save();
+      ctx.translate(hs.x, hs.y);
+      ctx.rotate(hunter.pulse * 0.18);
+      ctx.shadowBlur = 18;
+      ctx.shadowColor = '#ff8a2a';
+      ctx.strokeStyle = 'rgba(255,150,60,0.85)';
+      ctx.lineWidth = 3;
+      const sp = 10;
+      ctx.beginPath();
+      for (let i = 0; i < sp * 2; i++) {
+        const ang = (i / (sp * 2)) * Math.PI * 2;
+        const rr = i % 2 === 0 ? hunter.r * 1.38 : hunter.r * 0.96;
+        const px = Math.cos(ang) * rr;
+        const py = Math.sin(ang) * rr;
+        if (i === 0) ctx.moveTo(px, py);
+        else ctx.lineTo(px, py);
+      }
+      ctx.closePath();
+      ctx.stroke();
+      ctx.restore();
+    }
+
+    const arrowCol = hunter.stun > 0 ? 'rgb(150,100,255)' : isTitan ? 'rgb(255,138,42)' : 'rgb(255,50,68)';
+    drawArrow(hunter, arrowCol, isTitan ? 28 : 22);
   }
 
   if (!player.dead) {
@@ -735,6 +765,42 @@ export function drawScene() {
     ctx.shadowColor = '#ffaa33';
     ctx.fillStyle = '#ffaa33';
     ctx.fillText('⚠ ONDE IMMINENTE — FUIS LOIN', W / 2, 108);
+    ctx.restore();
+  }
+
+  if (biomeFlash > 0) {
+    const t = biomeFlash / 120;
+    const pulse = Math.sin(t * Math.PI);
+    ctx.save();
+    ctx.globalAlpha = pulse * 0.45;
+    ctx.fillStyle = biomeFlashGlow;
+    ctx.fillRect(0, 0, W, H);
+    ctx.restore();
+
+    // anneau d'onde qui balaie l'écran
+    ctx.save();
+    ctx.globalAlpha = pulse * 0.7;
+    ctx.strokeStyle = biomeFlashGlow;
+    ctx.lineWidth = 4;
+    ctx.shadowBlur = 24;
+    ctx.shadowColor = biomeFlashGlow;
+    ctx.beginPath();
+    ctx.arc(W / 2, H / 2, (1 - t) * Math.max(W, H) * 0.75, 0, Math.PI * 2);
+    ctx.stroke();
+    ctx.restore();
+
+    ctx.save();
+    ctx.textAlign = 'center';
+    ctx.globalAlpha = Math.min(1, t * 1.5);
+    ctx.shadowBlur = 12;
+    ctx.shadowColor = biomeFlashGlow;
+    ctx.fillStyle = 'rgba(255,255,255,0.65)';
+    ctx.font = '900 13px Orbitron,sans-serif';
+    ctx.fillText('▸ NOUVEAU SECTEUR ◂', W / 2, H * 0.4 - 28);
+    ctx.shadowBlur = 28;
+    ctx.fillStyle = '#fff';
+    ctx.font = '900 34px Orbitron,sans-serif';
+    ctx.fillText(biomeFlashName, W / 2, H * 0.4 + 10);
     ctx.restore();
   }
 

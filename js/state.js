@@ -30,6 +30,12 @@ export function setHunterCount(n) {
   hunterCount = n;
 }
 
+export let gameMode = 'classic';
+
+export function setGameMode(m) {
+  gameMode = m;
+}
+
 export function setJoy(value) {
   joy = value;
 }
@@ -46,6 +52,25 @@ export function setSpawn(x, y) {
   spawn.y = y;
 }
 
+export let biomeFlash = 0;
+export let biomeFlashName = '';
+export let biomeFlashGlow = '#ffffff';
+export let currentBiomeName = '';
+
+export function triggerBiomeFlash(name, glow) {
+  biomeFlash = 120;
+  biomeFlashName = name;
+  biomeFlashGlow = glow;
+}
+
+export function decBiomeFlash() {
+  if (biomeFlash > 0) biomeFlash--;
+}
+
+export function setCurrentBiomeName(name) {
+  currentBiomeName = name;
+}
+
 export function resetTimers() {
   elapsed = 0;
   frameCount = 0;
@@ -54,6 +79,8 @@ export function resetTimers() {
   powTimer = 0;
   waveWarning = 0;
   campTriggers = 0;
+  biomeFlash = 0;
+  currentBiomeName = '';
 }
 
 export function setShake(v) {
@@ -137,17 +164,21 @@ export const player = {
   trail: [],
 };
 
-export function makeHunter() {
+export function makeHunter(type = 'hunter') {
+  const titan = type === 'titan';
   return {
+    type,
     wx: 0,
     wy: 560,
     vx: 0,
     vy: 0,
     angle: 0,
-    r: 15,
-    ACCEL: 0.24,
-    FRICTION: 0.965,
-    MAXSP: 7.05,
+    r: titan ? 28 : 15,
+    ACCEL: titan ? 0.16 : 0.24,
+    baseACCEL: titan ? 0.16 : 0.24,
+    FRICTION: titan ? 0.975 : 0.965,
+    MAXSP: titan ? 4.4 : 7.05,
+    baseMAXSP: titan ? 4.4 : 7.05,
     pulse: Math.random() * 6,
     trail: [],
     stun: 0,
