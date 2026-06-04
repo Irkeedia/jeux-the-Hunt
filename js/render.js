@@ -501,8 +501,9 @@ function drawArrow(ent, color, glow) {
   ctx.restore();
 }
 
-// Bête forestière qui court : utilisée pour les ennemis quand le décor est la forêt.
-function drawBeast(ent, rgb, glow) {
+// Poulpe : ennemis de la forêt. Tête bulbeuse vers l'avant, tentacules
+// ondulants qui traînent derrière dans le sens de la nage.
+function drawOctopus(ent, rgb, glow) {
   const ps = ws(ent.wx, ent.wy);
   const r = ent.r;
   const halo = ctx.createRadialGradient(ps.x, ps.y, 0, ps.x, ps.y, r * 3.4);
@@ -519,68 +520,70 @@ function drawBeast(ent, rgb, glow) {
   ctx.shadowBlur = glow;
   ctx.shadowColor = `rgb(${rgb})`;
 
-  // pattes animées
-  ctx.strokeStyle = `rgba(${rgb},0.9)`;
-  ctx.lineWidth = Math.max(2, r * 0.16);
-  ctx.lineCap = 'round';
-  const swing = Math.sin(ent.pulse * 1.6) * r * 0.45;
-  [[-1, 1], [-1, -1], [0.7, 1], [0.7, -1]].forEach(([fx, fy], i) => {
-    const bx = fx * r * 0.5;
-    const by = fy * r * 0.62;
-    const sw = i % 2 === 0 ? swing : -swing;
-    ctx.beginPath();
-    ctx.moveTo(bx, by);
-    ctx.lineTo(bx - r * 0.25 + sw, by + fy * r * 0.55);
-    ctx.stroke();
-  });
-
-  // corps + tête
-  ctx.fillStyle = `rgba(${rgb},0.95)`;
-  ctx.strokeStyle = 'rgba(20,8,8,0.9)';
-  ctx.lineWidth = 2;
-  ctx.beginPath();
-  ctx.ellipse(0, 0, r * 1.18, r * 0.82, 0, 0, Math.PI * 2);
-  ctx.fill();
-  ctx.stroke();
-  ctx.beginPath();
-  ctx.arc(r * 0.92, 0, r * 0.6, 0, Math.PI * 2);
-  ctx.fill();
-  ctx.stroke();
-
-  // oreilles / cornes
-  ctx.fillStyle = `rgb(${rgb})`;
-  [-1, 1].forEach((s) => {
-    ctx.beginPath();
-    ctx.moveTo(r * 0.7, s * r * 0.5);
-    ctx.lineTo(r * 1.25, s * r * 1.0);
-    ctx.lineTo(r * 1.18, s * r * 0.42);
-    ctx.closePath();
-    ctx.fill();
-  });
-
-  // crinière dorsale
-  ctx.strokeStyle = `rgba(${rgb},0.9)`;
-  ctx.lineWidth = 2;
-  for (let i = -2; i <= 1; i++) {
-    ctx.beginPath();
-    ctx.moveTo(i * r * 0.32, -r * 0.6);
-    ctx.lineTo(i * r * 0.32 - r * 0.18, -r * 1.0);
-    ctx.stroke();
+  // tentacules : répartis vers l'arrière, chaque bras est une chaîne de
+  // billes qui s'amincit et ondule.
+  const tentacles = 7;
+  const spread = Math.PI * 1.25;
+  for (let i = 0; i < tentacles; i++) {
+    const baseA = Math.PI - spread / 2 + (i / (tentacles - 1)) * spread;
+    const px = Math.cos(baseA);
+    const py = Math.sin(baseA);
+    const nx = Math.cos(baseA + Math.PI / 2);
+    const ny = Math.sin(baseA + Math.PI / 2);
+    let x = px * r * 0.6;
+    let y = py * r * 0.6;
+    const segs = 6;
+    for (let s = 1; s <= segs; s++) {
+      const f = s / segs;
+      const wig = Math.sin(ent.pulse * 1.8 + i * 0.9 + s * 0.8) * r * 0.5 * f;
+      x += px * r * 0.4 + nx * wig * 0.35;
+      y += py * r * 0.4 + ny * wig * 0.35;
+      const rad = r * 0.36 * (1 - f * 0.78);
+      ctx.fillStyle = `rgba(${rgb},${0.9 - f * 0.45})`;
+      ctx.beginPath();
+      ctx.arc(x, y, rad, 0, Math.PI * 2);
+      ctx.fill();
+    }
   }
 
-  // yeux
+  // tête / manteau
+  ctx.fillStyle = `rgba(${rgb},0.96)`;
+  ctx.strokeStyle = 'rgba(18,6,16,0.85)';
+  ctx.lineWidth = 2;
+  ctx.beginPath();
+  ctx.ellipse(r * 0.28, 0, r * 1.08, r * 0.96, 0, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.stroke();
+
+  // reflet lustré
+  ctx.globalAlpha = 0.2;
+  ctx.fillStyle = '#fff';
+  ctx.beginPath();
+  ctx.ellipse(r * 0.2, -r * 0.4, r * 0.42, r * 0.22, -0.3, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.globalAlpha = 1;
+
+  // gros yeux vers l'avant
   ctx.shadowBlur = glow * 0.7;
   ctx.shadowColor = '#fff';
   ctx.fillStyle = '#fff';
   [-1, 1].forEach((s) => {
     ctx.beginPath();
-    ctx.arc(r * 1.08, s * r * 0.28, r * 0.16, 0, Math.PI * 2);
+    ctx.arc(r * 0.82, s * r * 0.44, r * 0.3, 0, Math.PI * 2);
     ctx.fill();
   });
-  ctx.fillStyle = '#ff2222';
+  ctx.fillStyle = '#15000c';
   [-1, 1].forEach((s) => {
     ctx.beginPath();
-    ctx.arc(r * 1.14, s * r * 0.28, r * 0.08, 0, Math.PI * 2);
+    ctx.arc(r * 0.95, s * r * 0.44, r * 0.14, 0, Math.PI * 2);
+    ctx.fill();
+  });
+  // pupilles brillantes
+  ctx.shadowBlur = 0;
+  ctx.fillStyle = '#ff3344';
+  [-1, 1].forEach((s) => {
+    ctx.beginPath();
+    ctx.arc(r * 0.95, s * r * 0.44, r * 0.06, 0, Math.PI * 2);
     ctx.fill();
   });
   ctx.restore();
@@ -891,8 +894,8 @@ export function drawScene() {
     ctx.restore();
 
     if (mapTheme === 'forest') {
-      const beastRgb = hunter.stun > 0 ? '150,100,255' : isTitan ? '255,150,60' : '210,40,40';
-      drawBeast(hunter, beastRgb, isTitan ? 26 : 18);
+      const octoRgb = hunter.stun > 0 ? '150,100,255' : isTitan ? '255,150,60' : '170,70,210';
+      drawOctopus(hunter, octoRgb, isTitan ? 26 : 18);
       continue;
     }
 
