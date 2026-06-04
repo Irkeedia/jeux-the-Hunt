@@ -10,6 +10,7 @@ import {
   glowCanvas,
   gctx,
   hunters,
+  monsters,
   obstacles,
   particles,
   player,
@@ -128,8 +129,101 @@ function drawObstacle(o) {
     ctx.stroke();
     ctx.setLineDash([]);
     ctx.globalAlpha = 1;
+  } else if (o.type === 'doorguard') {
+    // porte du refuge : ouverte pour le joueur, infranchissable pour l'ennemi
+    const hw = o.len / 2;
+    ctx.shadowBlur = 16;
+    ctx.shadowColor = '#63dcff';
+    ctx.strokeStyle = 'rgba(99,220,255,0.8)';
+    ctx.fillStyle = 'rgba(99,220,255,0.95)';
+    ctx.lineWidth = 2;
+    [-hw, hw].forEach((x) => {
+      ctx.beginPath();
+      ctx.arc(x, 0, 5.5, 0, Math.PI * 2);
+      ctx.fill();
+    });
+    ctx.globalAlpha = 0.22 + Math.sin(frameCount * 0.12) * 0.12;
+    ctx.setLineDash([6, 9]);
+    ctx.beginPath();
+    ctx.moveTo(-hw, 0);
+    ctx.lineTo(hw, 0);
+    ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.globalAlpha = 1;
   }
   ctx.restore();
+}
+
+function drawMonster(m) {
+  const ps = ws(m.wx, m.wy);
+  if (ps.x < -140 || ps.x > W + 140 || ps.y < -140 || ps.y > H + 140) return;
+  const col = m.aggro ? '255,70,160' : '150,90,220';
+
+  m.trail.forEach((t, i) => {
+    const p = ws(t.wx, t.wy);
+    ctx.globalAlpha = (1 - i / m.trail.length) * 0.22;
+    ctx.fillStyle = `rgba(${col},1)`;
+    ctx.beginPath();
+    ctx.arc(p.x, p.y, m.r * (1 - i / m.trail.length) * 0.5, 0, Math.PI * 2);
+    ctx.fill();
+  });
+  ctx.globalAlpha = 1;
+
+  ctx.save();
+  ctx.translate(ps.x, ps.y);
+  const halo = ctx.createRadialGradient(0, 0, 0, 0, 0, m.r * 3);
+  halo.addColorStop(0, `rgba(${col},0.5)`);
+  halo.addColorStop(1, `rgba(${col},0)`);
+  ctx.fillStyle = halo;
+  ctx.beginPath();
+  ctx.arc(0, 0, m.r * 3, 0, Math.PI * 2);
+  ctx.fill();
+
+  ctx.save();
+  ctx.rotate(m.pulse * 0.3);
+  ctx.shadowBlur = m.aggro ? 26 : 16;
+  ctx.shadowColor = `rgba(${col},1)`;
+  ctx.fillStyle = `rgba(${col},0.9)`;
+  ctx.strokeStyle = '#fff';
+  ctx.lineWidth = 1.5;
+  const spikes = 9;
+  ctx.beginPath();
+  for (let i = 0; i < spikes * 2; i++) {
+    const ang = (i / (spikes * 2)) * Math.PI * 2;
+    const rr = i % 2 === 0 ? m.r * (1.1 + Math.sin(m.pulse) * 0.12) : m.r * 0.62;
+    const px = Math.cos(ang) * rr;
+    const py = Math.sin(ang) * rr;
+    if (i === 0) ctx.moveTo(px, py);
+    else ctx.lineTo(px, py);
+  }
+  ctx.closePath();
+  ctx.fill();
+  ctx.stroke();
+  ctx.restore();
+
+  ctx.shadowBlur = 0;
+  ctx.fillStyle = '#fff';
+  ctx.beginPath();
+  ctx.arc(0, 0, m.r * 0.34, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.fillStyle = m.aggro ? '#ff2266' : '#3a1a5a';
+  ctx.beginPath();
+  ctx.arc(0, 0, m.r * 0.17, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.restore();
+  ctx.globalAlpha = 1;
+
+  if (m.aggro) {
+    ctx.save();
+    ctx.globalAlpha = 0.4 + Math.sin(frameCount * 0.3) * 0.2;
+    ctx.strokeStyle = `rgba(${col},1)`;
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.arc(ps.x, ps.y, m.r + 10 + Math.sin(frameCount * 0.2) * 4, 0, Math.PI * 2);
+    ctx.stroke();
+    ctx.restore();
+    ctx.globalAlpha = 1;
+  }
 }
 
 function drawSpecial(s) {
@@ -487,6 +581,7 @@ export function drawScene() {
   drawBackground();
   specials.forEach(drawSpecial);
   obstacles.forEach(drawObstacle);
+  monsters.forEach(drawMonster);
 
   player.trail.forEach((t, i) => {
     const p = ws(t.wx, t.wy);

@@ -38,7 +38,13 @@ export let elapsed = 0;
 export let frameCount = 0;
 export let distance = 0;
 export const cam = { x: 0, y: 0 };
+export const spawn = { x: 0, y: 0 };
 export let shake = 0;
+
+export function setSpawn(x, y) {
+  spawn.x = x;
+  spawn.y = y;
+}
 
 export function resetTimers() {
   elapsed = 0;
@@ -81,11 +87,13 @@ export function bumpCampTriggers() {
 
 export function clearWorld() {
   hunters.length = 0;
+  monsters.length = 0;
   particles.length = 0;
   obstacles.length = 0;
   specials.length = 0;
   generatedCells.clear();
   generatedMazes.clear();
+  generatedMonsters.clear();
   decoy = null;
   campHistory.length = 0;
   shockwaves.length = 0;
@@ -147,7 +155,31 @@ export function makeHunter() {
   };
 }
 
+export function makeMonster(wx, wy) {
+  return {
+    wx,
+    wy,
+    homeX: wx,
+    homeY: wy,
+    vx: 0,
+    vy: 0,
+    angle: Math.random() * Math.PI * 2,
+    r: 17,
+    ACCEL: 0.17,
+    FRICTION: 0.93,
+    MAXSP: 4.6,
+    aggro: false,
+    pulse: Math.random() * 6,
+    trail: [],
+    wanderAng: Math.random() * Math.PI * 2,
+    wanderT: 0,
+    cell: null,
+  };
+}
+
 export let hunters = [];
+export let monsters = [];
+export const generatedMonsters = new Set();
 export let hunterCount = 1;
 export let decoy = null;
 

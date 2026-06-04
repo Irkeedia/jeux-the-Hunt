@@ -15,3 +15,5 @@ export const HUNTER_BASE_MAXSP = 7.05;
 export const CAM_Y_OFFSET = -0.14;
 export const GLOW_SCALE = 0.5;
 export const TELE_COLORS = ['#c060ff', '#ff60c0', '#60ffc0'];
+export const MONSTER_CELL = 1000;
+export const MONSTER_AGGRO = 340;

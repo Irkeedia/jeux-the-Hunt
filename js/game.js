@@ -1,4 +1,4 @@
-import { CAMP_RADIUS, CAMP_WINDOW, HUNTER_BASE_MAXSP } from './config.js';
+import { CAMP_RADIUS, CAMP_WINDOW, HUNTER_BASE_MAXSP, MONSTER_AGGRO } from './config.js';
 import { formatTime, onGameOver } from './leaderboard.js';
 import { makeJoy } from './input.js';
 import { drawScene, updateHUD } from './render.js';
@@ -16,6 +16,7 @@ import {
   joy,
   keys,
   makeHunter,
+  monsters,
   mouseControl,
   particles,
   player,
@@ -30,16 +31,18 @@ import {
   setJoy,
   setPowTimer,
   setShake,
+  setSpawn,
   setWaveWarning,
   shake,
   shockwaves,
+  spawn,
   specials,
   tickFrame,
   waveWarning,
 } from './state.js';
 import { showDeadScreen } from './ui.js';
 import { explode, getBiomeAt } from './utils.js';
-import { circleBlocked, ensureGenAround, hunterAvoidDir } from './world.js';
+import { circleBlocked, ensureGenAround, hunterAvoidDir, sweptMove } from './world.js';
 
 export function setHunters(n) {
   setHunterCount(n);
@@ -109,18 +112,7 @@ export function update() {
     player.vx = (player.vx / psp) * pmax;
     player.vy = (player.vy / psp) * pmax;
   }
-  player.wx += player.vx;
-  player.wy += player.vy;
-  const pb = circleBlocked(player.wx, player.wy, player.r);
-  if (pb.hit) {
-    player.wx += pb.nx * pb.push;
-    player.wy += pb.ny * pb.push;
-    const dot = player.vx * pb.nx + player.vy * pb.ny;
-    if (dot < 0) {
-      player.vx -= dot * pb.nx;
-      player.vy -= dot * pb.ny;
-    }
-  }
+  sweptMove(player, false);
 
   if (player.boost > 0 && frameCount % 2 === 0) {
     particles.push({
@@ -137,7 +129,7 @@ export function update() {
 
   player.trail.unshift({ wx: player.wx, wy: player.wy });
   if (player.trail.length > 22) player.trail.pop();
-  setDistance(Math.round(Math.sqrt(player.wx ** 2 + player.wy ** 2) / 10));
+  setDistance(Math.round(Math.sqrt((player.wx - spawn.x) ** 2 + (player.wy - spawn.y) ** 2) / 10));
 
   player.inMud = false;
   for (const s of specials) {
@@ -247,8 +239,6 @@ export function update() {
       hunter.stun--;
       hunter.vx *= 0.8;
       hunter.vy *= 0.8;
-      hunter.wx += hunter.vx;
-      hunter.wy += hunter.vy;
     } else {
       const desiredDir = hunterAvoidDir(hunter.wx, hunter.wy, tx, ty);
       hunter.angle = desiredDir;
@@ -285,8 +275,6 @@ export function update() {
         hunter.vx = (hunter.vx / hsp) * hunter.MAXSP;
         hunter.vy = (hunter.vy / hsp) * hunter.MAXSP;
       }
-      hunter.wx += hunter.vx;
-      hunter.wy += hunter.vy;
     }
 
     for (const other of hunters) {
@@ -301,15 +289,9 @@ export function update() {
       }
     }
 
-    const hb = circleBlocked(hunter.wx, hunter.wy, hunter.r);
-    if (hb.hit) {
-      hunter.wx += hb.nx * hb.push;
-      hunter.wy += hb.ny * hb.push;
-      const dot = hunter.vx * hb.nx + hunter.vy * hb.ny;
-      hunter.vx -= dot * hb.nx;
-      hunter.vy -= dot * hb.ny;
-      hunter.vx *= 0.8;
-      hunter.vy *= 0.8;
+    const hb = sweptMove(hunter, true);
+    if (hb.hit && hunter.stun <= 0) {
+      // longe la paroi pour contourner l'obstacle au lieu de s'y coller
       hunter.vx += -hb.ny * 0.4;
       hunter.vy += hb.nx * 0.4;
     }
@@ -321,6 +303,60 @@ export function update() {
     const hd = Math.sqrt((player.wx - hunter.wx) ** 2 + (player.wy - hunter.wy) ** 2);
     if (hd < minHd) minHd = hd;
     if (hd < player.r + hunter.r && player.invis <= 0) caught(false);
+  }
+
+  for (const m of monsters) {
+    const pd = Math.sqrt((player.wx - m.wx) ** 2 + (player.wy - m.wy) ** 2);
+    const homeDist = Math.sqrt((m.wx - m.homeX) ** 2 + (m.wy - m.homeY) ** 2);
+
+    if (!player.dead && player.invis <= 0 && pd < MONSTER_AGGRO) m.aggro = true;
+    if (m.aggro && (pd > MONSTER_AGGRO * 1.9 || homeDist > 760 || player.invis > 0)) m.aggro = false;
+
+    let tx;
+    let ty;
+    let acc;
+    let msp;
+    if (m.aggro && !player.dead) {
+      tx = player.wx;
+      ty = player.wy;
+      acc = m.ACCEL * 1.5;
+      msp = m.MAXSP;
+    } else {
+      if (homeDist > 150) {
+        tx = m.homeX;
+        ty = m.homeY;
+      } else {
+        m.wanderT--;
+        if (m.wanderT <= 0) {
+          m.wanderAng = Math.random() * Math.PI * 2;
+          m.wanderT = 70 + Math.random() * 70;
+        }
+        tx = m.homeX + Math.cos(m.wanderAng) * 90;
+        ty = m.homeY + Math.sin(m.wanderAng) * 90;
+      }
+      acc = m.ACCEL * 0.55;
+      msp = m.MAXSP * 0.5;
+    }
+
+    const dir = Math.atan2(ty - m.wy, tx - m.wx);
+    m.vx += Math.cos(dir) * acc;
+    m.vy += Math.sin(dir) * acc;
+    m.vx *= m.FRICTION;
+    m.vy *= m.FRICTION;
+    const sp = Math.sqrt(m.vx ** 2 + m.vy ** 2);
+    if (sp > msp) {
+      m.vx = (m.vx / sp) * msp;
+      m.vy = (m.vy / sp) * msp;
+    }
+    if (sp > 0.2) m.angle = Math.atan2(m.vy, m.vx);
+    sweptMove(m, true);
+
+    m.pulse += 0.12;
+    m.trail.unshift({ wx: m.wx, wy: m.wy });
+    if (m.trail.length > 12) m.trail.pop();
+
+    if (pd < minHd) minHd = pd;
+    if (pd < player.r + m.r && player.invis <= 0) caught(false);
   }
 
   cam.x += (player.wx - cam.x) * 0.12;
@@ -357,18 +393,40 @@ export function startGame() {
   resetPlayer();
   clearWorld();
 
+  // Point de départ aléatoire : un lieu différent du monde à chaque partie.
+  const ang0 = Math.random() * Math.PI * 2;
+  const dist0 = 5000 + Math.random() * 90000;
+  let sx = Math.cos(ang0) * dist0;
+  let sy = Math.sin(ang0) * dist0;
+
+  player.wx = sx;
+  player.wy = sy;
+  ensureGenAround(sx, sy);
+  // dégage le joueur s'il apparaît dans un mur
+  for (let i = 0; i < 24; i++) {
+    const b = circleBlocked(sx, sy, player.r + 6);
+    if (!b.hit) break;
+    sx += b.nx * (b.push + 2);
+    sy += b.ny * (b.push + 2);
+  }
+  player.wx = sx;
+  player.wy = sy;
+  cam.x = sx;
+  cam.y = sy;
+  setSpawn(sx, sy);
+
   for (let i = 0; i < hunterCount; i++) {
     const h = makeHunter();
     const ang = Math.PI / 2 + (i - (hunterCount - 1) / 2) * 0.7;
-    h.wx = Math.cos(ang) * 560;
-    h.wy = Math.sin(ang) * 560;
+    h.wx = sx + Math.cos(ang) * 560;
+    h.wy = sy + Math.sin(ang) * 560;
     h.MAXSP = HUNTER_BASE_MAXSP;
     h.ACCEL = 0.24;
     hunters.push(h);
   }
 
   document.getElementById('powerup-tag').textContent = '';
-  ensureGenAround(0, 0);
+  ensureGenAround(sx, sy);
   if (!joy) setJoy(makeJoy('joy-main'));
   setGameState('playing');
 }

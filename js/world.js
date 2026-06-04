@@ -1,8 +1,11 @@
-import { CELL, MAZE_GRID, TELE_COLORS } from './config.js';
+import { CELL, MAZE_GRID, MONSTER_CELL, TELE_COLORS } from './config.js';
 import {
   frameCount,
   generatedCells,
   generatedMazes,
+  generatedMonsters,
+  makeMonster,
+  monsters,
   obstacles,
   specials,
 } from './state.js';
@@ -10,7 +13,7 @@ import { angleDiff, getBiomeAt, seededRand } from './utils.js';
 
 export function obstacleColliders(o) {
   if (o.type === 'hex' || o.type === 'spiral') return [{ x: o.wx, y: o.wy, r: o.r }];
-  if (o.type === 'tube') {
+  if (o.type === 'tube' || o.type === 'doorguard') {
     const cs = [];
     const n = Math.max(2, Math.round(o.len / o.th));
     for (let i = 0; i <= n; i++) {
@@ -34,8 +37,9 @@ export function obstacleColliders(o) {
   return [];
 }
 
-export function circleBlocked(wx, wy, radius) {
+export function circleBlocked(wx, wy, radius, isEnemy = false) {
   for (const o of obstacles) {
+    if (o.enemyOnly && !isEnemy) continue;
     for (const c of obstacleColliders(o)) {
       const dx = wx - c.x;
       const dy = wy - c.y;
@@ -50,52 +54,92 @@ export function circleBlocked(wx, wy, radius) {
   return { hit: false };
 }
 
-function generateMaze(cx, cy, seed, biome) {
-  const cells = 4;
-  const cellSize = 78;
-  const wallTh = 18;
-  const half = (cells * cellSize) / 2;
+// Déplacement balayé : on avance par petits pas pour empêcher de traverser
+// un mur fin à grande vitesse (tunneling), et on glisse le long des parois.
+export function sweptMove(ent, isEnemy = false) {
+  const sp = Math.sqrt(ent.vx * ent.vx + ent.vy * ent.vy);
+  const maxStep = Math.max(2, ent.r * 0.55);
+  const steps = Math.min(8, Math.max(1, Math.ceil(sp / maxStep)));
+  let last = { hit: false, nx: 0, ny: 0, push: 0 };
+  for (let i = 0; i < steps; i++) {
+    ent.wx += ent.vx / steps;
+    ent.wy += ent.vy / steps;
+    const b = circleBlocked(ent.wx, ent.wy, ent.r, isEnemy);
+    if (b.hit) {
+      ent.wx += b.nx * b.push;
+      ent.wy += b.ny * b.push;
+      const dot = ent.vx * b.nx + ent.vy * b.ny;
+      if (dot < 0) {
+        ent.vx -= dot * b.nx;
+        ent.vy -= dot * b.ny;
+      }
+      last = b;
+    }
+  }
+  return last;
+}
 
-  function addWall(x1, y1, x2, y2) {
-    const mx = (x1 + x2) / 2;
-    const my = (y1 + y2) / 2;
+// Salle-refuge : enceinte fermée avec une seule porte visible. La porte est
+// franchissable par le joueur mais bloquée par un « doorguard » qui ne repousse
+// que les ennemis (chasseurs et monstres).
+function generateSanctuary(cx, cy, seed, biome) {
+  const half = 130 + seededRand(seed, 7) * 45;
+  const wallTh = 16;
+  const doorGap = 74;
+  const doorSide = Math.floor(seededRand(seed + 3, seed + 9) * 4);
+
+  function wall(x1, y1, x2, y2) {
     const len = Math.sqrt((x2 - x1) ** 2 + (y2 - y1) ** 2);
-    const rot = Math.atan2(y2 - y1, x2 - x1);
+    if (len < 4) return;
     obstacles.push({
       type: 'tube',
-      wx: cx - half + mx,
-      wy: cy - half + my,
+      wx: cx + (x1 + x2) / 2,
+      wy: cy + (y1 + y2) / 2,
       len,
       th: wallTh,
-      rot,
+      rot: Math.atan2(y2 - y1, x2 - x1),
       biome,
-      maze: seed,
+      sanctuary: true,
     });
   }
 
-  for (let i = 0; i <= cells; i++) {
-    for (let j = 0; j < cells; j++) {
-      if (i > 0 && i < cells && seededRand(seed + i * 3.1, j * 7.7) < 0.55) {
-        addWall(j * cellSize, i * cellSize, (j + 1) * cellSize, i * cellSize);
-      }
-    }
-  }
-  for (let i = 0; i < cells; i++) {
-    for (let j = 0; j <= cells; j++) {
-      if (j > 0 && j < cells && seededRand(seed + j * 5.3, i * 2.9) < 0.55) {
-        addWall(j * cellSize, i * cellSize, j * cellSize, (i + 1) * cellSize);
-      }
-    }
-  }
-  const sides = [
-    [0, 0, cells * cellSize, 0],
-    [0, cells * cellSize, cells * cellSize, cells * cellSize],
-    [0, 0, 0, cells * cellSize],
-    [cells * cellSize, 0, cells * cellSize, cells * cellSize],
+  const corners = [
+    [-half, -half],
+    [half, -half],
+    [half, half],
+    [-half, half],
   ];
-  sides.forEach((s, si) => {
-    if (seededRand(seed + si * 11, si) < 0.5) return;
-    addWall(s[0], s[1], s[2], s[3]);
+  const edges = [
+    [corners[0], corners[1]],
+    [corners[1], corners[2]],
+    [corners[2], corners[3]],
+    [corners[3], corners[0]],
+  ];
+
+  edges.forEach((e, ei) => {
+    const [a, b] = e;
+    if (ei !== doorSide) {
+      wall(a[0], a[1], b[0], b[1]);
+      return;
+    }
+    const mx = (a[0] + b[0]) / 2;
+    const my = (a[1] + b[1]) / 2;
+    const len = Math.sqrt((b[0] - a[0]) ** 2 + (b[1] - a[1]) ** 2);
+    const ux = (b[0] - a[0]) / len;
+    const uy = (b[1] - a[1]) / len;
+    const g = doorGap / 2;
+    wall(a[0], a[1], mx - ux * g, my - uy * g);
+    wall(mx + ux * g, my + uy * g, b[0], b[1]);
+    obstacles.push({
+      type: 'doorguard',
+      wx: cx + mx,
+      wy: cy + my,
+      len: doorGap,
+      th: 30,
+      rot: Math.atan2(uy, ux),
+      biome,
+      enemyOnly: true,
+    });
   });
 }
 
@@ -113,9 +157,8 @@ export function ensureGenAround(wx, wy) {
       if (seededRand(gx + 50, gy + 50) < 0.28) {
         const ox = gx * MAZE_GRID + MAZE_GRID / 2;
         const oy = gy * MAZE_GRID + MAZE_GRID / 2;
-        if (Math.sqrt(ox * ox + oy * oy) < 400) continue;
         const { biome } = getBiomeAt(ox, oy);
-        generateMaze(ox, oy, gx * 31.7 + gy * 91.3, biome);
+        generateSanctuary(ox, oy, gx * 31.7 + gy * 91.3, biome);
       }
     }
   }
@@ -186,6 +229,26 @@ export function ensureGenAround(wx, wy) {
     }
   }
 
+  const mccx = Math.floor(wx / MONSTER_CELL);
+  const mccy = Math.floor(wy / MONSTER_CELL);
+  for (let gx = mccx - 2; gx <= mccx + 2; gx++) {
+    for (let gy = mccy - 2; gy <= mccy + 2; gy++) {
+      const key = `${gx},${gy}`;
+      if (generatedMonsters.has(key)) continue;
+      if (seededRand(gx + 300, gy + 700) < 0.5) {
+        const ox = gx * MONSTER_CELL + (seededRand(gx + 8, gy) * 0.6 + 0.2) * MONSTER_CELL;
+        const oy = gy * MONSTER_CELL + (seededRand(gx, gy + 8) * 0.6 + 0.2) * MONSTER_CELL;
+        const d = Math.sqrt((ox - wx) ** 2 + (oy - wy) ** 2);
+        // ni sur le joueur, ni trop loin (sinon purgé aussitôt) : on réessaiera
+        if (d < 650 || d > 2000) continue;
+        const m = makeMonster(ox, oy);
+        m.cell = key;
+        monsters.push(m);
+      }
+      generatedMonsters.add(key);
+    }
+  }
+
   obstacles.splice(
     0,
     obstacles.length,
@@ -205,6 +268,13 @@ export function ensureGenAround(wx, wy) {
     for (const k of generatedMazes) {
       const [a, b] = k.split(',').map(Number);
       if (Math.abs(a * MAZE_GRID - wx) > 2400 || Math.abs(b * MAZE_GRID - wy) > 2400) generatedMazes.delete(k);
+    }
+    for (let i = monsters.length - 1; i >= 0; i--) {
+      const m = monsters[i];
+      if (Math.abs(m.wx - wx) > 2200 || Math.abs(m.wy - wy) > 2200) {
+        if (m.cell) generatedMonsters.delete(m.cell);
+        monsters.splice(i, 1);
+      }
     }
   }
 }
