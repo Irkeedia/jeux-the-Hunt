@@ -2,7 +2,7 @@ import { setHunters, startGame, update } from './game.js';
 import { initKeyboard, initMouseControls, makeJoy } from './input.js';
 import { getPlayerName, initLeaderboardUI } from './leaderboard.js';
 import { drawScene } from './render.js';
-import { gameState, joy, resizeCanvas, setGameMode, setGameState, setJoy } from './state.js';
+import { gameState, joy, resizeCanvas, setGameMode, setGameState, setJoy, setMapTheme } from './state.js';
 import { initUI, showGameplay, showMenu } from './ui.js';
 
 function boot() {
@@ -33,6 +33,7 @@ function boot() {
     },
     onHuntersChange: setHunters,
     onModeChange: setGameMode,
+    onMapChange: setMapTheme,
     onHome: () => {
       setGameState('menu');
       showMenu();

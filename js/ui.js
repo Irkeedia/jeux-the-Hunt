@@ -44,7 +44,7 @@ export function showGameplay() {
   document.getElementById('joy-main').style.display = 'flex';
 }
 
-export function initUI({ onPlay, onHuntersChange, onModeChange, onHome }) {
+export function initUI({ onPlay, onHuntersChange, onModeChange, onMapChange, onHome }) {
   const playBtn = document.getElementById('btn-play');
   if (playBtn) {
     playBtn.addEventListener('click', (e) => {
@@ -66,6 +66,17 @@ export function initUI({ onPlay, onHuntersChange, onModeChange, onHome }) {
         b.setAttribute('aria-pressed', String(active));
       });
       onModeChange?.(btn.dataset.mode);
+    });
+  });
+
+  document.querySelectorAll('.map-btn').forEach((btn) => {
+    btn.addEventListener('click', () => {
+      document.querySelectorAll('.map-btn').forEach((b) => {
+        const active = b === btn;
+        b.classList.toggle('active', active);
+        b.setAttribute('aria-pressed', String(active));
+      });
+      onMapChange?.(btn.dataset.map);
     });
   });
 

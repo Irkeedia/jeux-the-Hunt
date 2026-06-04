@@ -36,6 +36,12 @@ export function setGameMode(m) {
   gameMode = m;
 }
 
+export let mapTheme = 'space';
+
+export function setMapTheme(t) {
+  mapTheme = t;
+}
+
 export function setJoy(value) {
   joy = value;
 }

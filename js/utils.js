@@ -1,5 +1,5 @@
-import { BIOMES, BIOME_SIZE } from './config.js';
-import { particles } from './state.js';
+import { BIOMES, BIOME_SIZE, FOREST_BIOMES } from './config.js';
+import { mapTheme, particles } from './state.js';
 
 export function seededRand(x, y) {
   const n = Math.sin(x * 127.1 + y * 311.7) * 43758.5453;
@@ -7,10 +7,11 @@ export function seededRand(x, y) {
 }
 
 export function getBiomeAt(wx, wy) {
+  const set = mapTheme === 'forest' ? FOREST_BIOMES : BIOMES;
   const bx = Math.floor(wx / BIOME_SIZE);
   const by = Math.floor(wy / BIOME_SIZE);
-  const idx = Math.floor(seededRand(bx, by) * BIOMES.length);
-  return { biome: BIOMES[idx], bx, by };
+  const idx = Math.floor(seededRand(bx, by) * set.length);
+  return { biome: set[idx], bx, by };
 }
 
 export function angleDiff(a, b) {

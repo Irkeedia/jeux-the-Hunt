@@ -6,6 +6,7 @@ import {
   generatedMazes,
   generatedMonsters,
   makeMonster,
+  mapTheme,
   monsters,
   obstacles,
   specials,
@@ -13,7 +14,9 @@ import {
 import { angleDiff, getBiomeAt, seededRand } from './utils.js';
 
 export function obstacleColliders(o) {
-  if (o.type === 'hex' || o.type === 'spiral') return [{ x: o.wx, y: o.wy, r: o.r }];
+  if (o.type === 'hex' || o.type === 'spiral' || o.type === 'tree' || o.type === 'rock') {
+    return [{ x: o.wx, y: o.wy, r: o.r }];
+  }
   if (o.type === 'tube' || o.type === 'doorguard') {
     const cs = [];
     const n = Math.max(2, Math.round(o.len / o.th));
@@ -155,7 +158,7 @@ export function ensureGenAround(wx, wy) {
       const mkey = `${gx},${gy}`;
       if (generatedMazes.has(mkey)) continue;
       generatedMazes.add(mkey);
-      if (gameMode !== 'titan' && seededRand(gx + 50, gy + 50) < 0.28) {
+      if (gameMode !== 'titan' && mapTheme !== 'forest' && seededRand(gx + 50, gy + 50) < 0.28) {
         const ox = gx * MAZE_GRID + MAZE_GRID / 2;
         const oy = gy * MAZE_GRID + MAZE_GRID / 2;
         const { biome } = getBiomeAt(ox, oy);
@@ -176,8 +179,33 @@ export function ensureGenAround(wx, wy) {
       const { biome } = getBiomeAt(ox, oy);
       const rot = seededRand(gx + 2, gy + 3) * Math.PI * 2;
 
-      if (gameMode === 'titan' && r1 < 0.4) {
-        // zone ouverte : aucun obstacle physique en mode Titan
+      // Forêt dense : plusieurs arbres / roches par cellule (en plus des spéciaux).
+      if (mapTheme === 'forest' && gameMode !== 'titan') {
+        const count = 1 + Math.floor(seededRand(gx + 60, gy + 60) * 3);
+        for (let k = 0; k < count; k++) {
+          const tx = gx * CELL + seededRand(gx + k * 2.3 + 1, gy + k) * CELL;
+          const ty = gy * CELL + seededRand(gx + k, gy + k * 2.3 + 1) * CELL;
+          if (Math.sqrt(tx * tx + ty * ty) < 180) continue;
+          const tb = getBiomeAt(tx, ty).biome;
+          const trot = seededRand(tx + 1, ty + 2) * Math.PI * 2;
+          if (seededRand(gx + k * 5, gy + k * 7) < 0.3) {
+            obstacles.push({ type: 'rock', wx: tx, wy: ty, r: 20 + seededRand(tx, ty) * 22, rot: trot, biome: tb });
+          } else {
+            obstacles.push({
+              type: 'tree',
+              wx: tx,
+              wy: ty,
+              r: 14 + seededRand(tx, ty + 3) * 12,
+              canopy: 40 + seededRand(ty, tx + 3) * 34,
+              rot: trot,
+              biome: tb,
+            });
+          }
+        }
+      }
+
+      if (r1 < 0.4 && (gameMode === 'titan' || mapTheme === 'forest')) {
+        // zone ouverte (Titan) ou décor géré par le pass forêt : pas d'obstacle sci-fi
       } else if (r1 < 0.4) {
         const st = seededRand(gx + 11, gy + 7);
         if (st < 0.45) {

@@ -6,6 +6,14 @@ export const BIOMES = [
   { name: 'ZONE CARMIN', bg: '#140608', grid: 'rgba(230,70,90,0.06)', glow: 'rgba(240,70,90,0.5)', fill: 'rgba(110,30,45,0.55)' },
 ];
 
+export const FOREST_BIOMES = [
+  { name: 'BOIS SOMBRES', bg: '#06120a', grid: 'rgba(60,160,90,0.05)', glow: 'rgba(80,200,120,0.5)', fill: 'rgba(28,66,38,0.62)' },
+  { name: 'CLAIRIÈRE BRUMEUSE', bg: '#0a160e', grid: 'rgba(120,200,140,0.05)', glow: 'rgba(150,230,160,0.5)', fill: 'rgba(48,88,56,0.62)' },
+  { name: 'MARÉCAGE', bg: '#0a1208', grid: 'rgba(120,150,60,0.05)', glow: 'rgba(160,190,80,0.5)', fill: 'rgba(58,68,28,0.62)' },
+  { name: 'PINÈDE PROFONDE', bg: '#04100e', grid: 'rgba(50,150,140,0.05)', glow: 'rgba(70,190,170,0.5)', fill: 'rgba(24,66,60,0.62)' },
+  { name: 'RONCERAIE', bg: '#120c06', grid: 'rgba(180,120,60,0.05)', glow: 'rgba(210,150,80,0.5)', fill: 'rgba(78,50,24,0.62)' },
+];
+
 export const BIOME_SIZE = 1400;
 export const CELL = 300;
 export const MAZE_GRID = 620;

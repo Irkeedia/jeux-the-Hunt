@@ -13,6 +13,7 @@ import {
   glowCanvas,
   gctx,
   hunters,
+  mapTheme,
   monsters,
   obstacles,
   particles,
@@ -131,6 +132,67 @@ function drawObstacle(o) {
     ctx.lineTo(0, -off + o.pr);
     ctx.stroke();
     ctx.setLineDash([]);
+    ctx.globalAlpha = 1;
+  } else if (o.type === 'rock') {
+    ctx.shadowBlur = 8;
+    ctx.shadowColor = b.glow;
+    ctx.fillStyle = b.fill;
+    ctx.strokeStyle = b.glow;
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    const n = 7;
+    for (let i = 0; i < n; i++) {
+      const a = (i / n) * Math.PI * 2;
+      const rr = o.r * (0.78 + seededRand(o.wx + i, o.wy) * 0.32);
+      const px = Math.cos(a) * rr;
+      const py = Math.sin(a) * rr;
+      if (i === 0) ctx.moveTo(px, py);
+      else ctx.lineTo(px, py);
+    }
+    ctx.closePath();
+    ctx.fill();
+    ctx.stroke();
+    ctx.globalAlpha = 0.2;
+    ctx.fillStyle = '#fff';
+    ctx.beginPath();
+    ctx.arc(-o.r * 0.22, -o.r * 0.22, o.r * 0.32, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.globalAlpha = 1;
+  } else if (o.type === 'tree') {
+    const c = o.canopy;
+    // ombre au sol
+    ctx.fillStyle = 'rgba(0,0,0,0.35)';
+    ctx.beginPath();
+    ctx.ellipse(c * 0.18, c * 0.2, c * 0.78, c * 0.5, 0, 0, Math.PI * 2);
+    ctx.fill();
+    // tronc
+    ctx.shadowBlur = 0;
+    ctx.fillStyle = 'rgba(46,32,20,0.95)';
+    ctx.beginPath();
+    ctx.arc(0, 0, o.r, 0, Math.PI * 2);
+    ctx.fill();
+    // feuillage en grappe
+    ctx.shadowBlur = 12;
+    ctx.shadowColor = b.glow;
+    ctx.fillStyle = b.fill;
+    ctx.strokeStyle = b.glow;
+    ctx.lineWidth = 2;
+    for (let i = 0; i < 5; i++) {
+      const a = o.rot + (i / 5) * Math.PI * 2;
+      ctx.beginPath();
+      ctx.arc(Math.cos(a) * c * 0.4, Math.sin(a) * c * 0.4, c * 0.5, 0, Math.PI * 2);
+      ctx.fill();
+    }
+    ctx.beginPath();
+    ctx.arc(0, 0, c * 0.66, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.stroke();
+    // reflets
+    ctx.globalAlpha = 0.18;
+    ctx.fillStyle = '#eaffe0';
+    ctx.beginPath();
+    ctx.arc(-c * 0.2, -c * 0.2, c * 0.28, 0, Math.PI * 2);
+    ctx.fill();
     ctx.globalAlpha = 1;
   } else if (o.type === 'doorguard') {
     // porte du refuge : ouverte pour le joueur, infranchissable pour l'ennemi
@@ -439,6 +501,145 @@ function drawArrow(ent, color, glow) {
   ctx.restore();
 }
 
+// Bête forestière qui court : utilisée pour les ennemis quand le décor est la forêt.
+function drawBeast(ent, rgb, glow) {
+  const ps = ws(ent.wx, ent.wy);
+  const r = ent.r;
+  const halo = ctx.createRadialGradient(ps.x, ps.y, 0, ps.x, ps.y, r * 3.4);
+  halo.addColorStop(0, `rgba(${rgb},0.42)`);
+  halo.addColorStop(1, `rgba(${rgb},0)`);
+  ctx.fillStyle = halo;
+  ctx.beginPath();
+  ctx.arc(ps.x, ps.y, r * 3.4, 0, Math.PI * 2);
+  ctx.fill();
+
+  ctx.save();
+  ctx.translate(ps.x, ps.y);
+  ctx.rotate(ent.angle);
+  ctx.shadowBlur = glow;
+  ctx.shadowColor = `rgb(${rgb})`;
+
+  // pattes animées
+  ctx.strokeStyle = `rgba(${rgb},0.9)`;
+  ctx.lineWidth = Math.max(2, r * 0.16);
+  ctx.lineCap = 'round';
+  const swing = Math.sin(ent.pulse * 1.6) * r * 0.45;
+  [[-1, 1], [-1, -1], [0.7, 1], [0.7, -1]].forEach(([fx, fy], i) => {
+    const bx = fx * r * 0.5;
+    const by = fy * r * 0.62;
+    const sw = i % 2 === 0 ? swing : -swing;
+    ctx.beginPath();
+    ctx.moveTo(bx, by);
+    ctx.lineTo(bx - r * 0.25 + sw, by + fy * r * 0.55);
+    ctx.stroke();
+  });
+
+  // corps + tête
+  ctx.fillStyle = `rgba(${rgb},0.95)`;
+  ctx.strokeStyle = 'rgba(20,8,8,0.9)';
+  ctx.lineWidth = 2;
+  ctx.beginPath();
+  ctx.ellipse(0, 0, r * 1.18, r * 0.82, 0, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.stroke();
+  ctx.beginPath();
+  ctx.arc(r * 0.92, 0, r * 0.6, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.stroke();
+
+  // oreilles / cornes
+  ctx.fillStyle = `rgb(${rgb})`;
+  [-1, 1].forEach((s) => {
+    ctx.beginPath();
+    ctx.moveTo(r * 0.7, s * r * 0.5);
+    ctx.lineTo(r * 1.25, s * r * 1.0);
+    ctx.lineTo(r * 1.18, s * r * 0.42);
+    ctx.closePath();
+    ctx.fill();
+  });
+
+  // crinière dorsale
+  ctx.strokeStyle = `rgba(${rgb},0.9)`;
+  ctx.lineWidth = 2;
+  for (let i = -2; i <= 1; i++) {
+    ctx.beginPath();
+    ctx.moveTo(i * r * 0.32, -r * 0.6);
+    ctx.lineTo(i * r * 0.32 - r * 0.18, -r * 1.0);
+    ctx.stroke();
+  }
+
+  // yeux
+  ctx.shadowBlur = glow * 0.7;
+  ctx.shadowColor = '#fff';
+  ctx.fillStyle = '#fff';
+  [-1, 1].forEach((s) => {
+    ctx.beginPath();
+    ctx.arc(r * 1.08, s * r * 0.28, r * 0.16, 0, Math.PI * 2);
+    ctx.fill();
+  });
+  ctx.fillStyle = '#ff2222';
+  [-1, 1].forEach((s) => {
+    ctx.beginPath();
+    ctx.arc(r * 1.14, s * r * 0.28, r * 0.08, 0, Math.PI * 2);
+    ctx.fill();
+  });
+  ctx.restore();
+}
+
+function drawForestBackground() {
+  const c = getBiomeAt(cam.x, cam.y).biome;
+  const grd = ctx.createRadialGradient(W / 2, H * 0.42, 0, W / 2, H * 0.42, Math.max(W, H) * 0.85);
+  grd.addColorStop(0, c.bg);
+  grd.addColorStop(1, '#02060a');
+  ctx.fillStyle = grd;
+  ctx.fillRect(-60, -60, W + 120, H + 120);
+
+  // halos de lumière filtrée (rayons / clairières)
+  for (let i = 0; i < 4; i++) {
+    const nx = (((i * 443.3 - cam.x * 0.05) % (W * 1.5)) + W * 1.5) % (W * 1.5) - W * 0.25;
+    const ny = (((i * 287.7 - cam.y * 0.05) % (H * 1.5)) + H * 1.5) % (H * 1.5) - H * 0.25;
+    const ng = ctx.createRadialGradient(nx, ny, 0, nx, ny, 320);
+    ng.addColorStop(0, c.glow.replace(/[\d.]+\)$/, '0.07)'));
+    ng.addColorStop(1, 'rgba(0,0,0,0)');
+    ctx.fillStyle = ng;
+    ctx.fillRect(nx - 320, ny - 320, 640, 640);
+  }
+
+  // grille sol discrète
+  const gs = 90;
+  ctx.strokeStyle = c.grid;
+  ctx.lineWidth = 1;
+  const yoff = H * CAM_Y_OFFSET;
+  const ox = ((-cam.x % gs) + gs) % gs;
+  const oy = (((-cam.y + yoff) % gs) + gs) % gs;
+  for (let x = ox - gs; x < W + gs; x += gs) {
+    ctx.beginPath();
+    ctx.moveTo(x, 0);
+    ctx.lineTo(x, H);
+    ctx.stroke();
+  }
+  for (let y = oy - gs; y < H + gs; y += gs) {
+    ctx.beginPath();
+    ctx.moveTo(0, y);
+    ctx.lineTo(W, y);
+    ctx.stroke();
+  }
+
+  // lucioles
+  ctx.fillStyle = c.glow;
+  for (let i = 0; i < 42; i++) {
+    const sx = (i * 97.13) % W;
+    const sy = (i * 61.7) % H;
+    const px = (((sx - cam.x * 0.2) % W) + W) % W;
+    const py = (((sy - cam.y * 0.2) % H) + H) % H;
+    ctx.globalAlpha = 0.25 + 0.35 * Math.sin(frameCount * 0.05 + i);
+    ctx.beginPath();
+    ctx.arc(px, py, 1.7, 0, Math.PI * 2);
+    ctx.fill();
+  }
+  ctx.globalAlpha = 1;
+}
+
 function drawGalaxy(gx, gy, seed, baseHue) {
   const r = 140 + seededRand(seed, 1) * 120;
   const arms = 2 + Math.floor(seededRand(seed, 2) * 3);
@@ -502,6 +703,10 @@ function drawDeepSpace() {
 }
 
 function drawBackground() {
+  if (mapTheme === 'forest') {
+    drawForestBackground();
+    return;
+  }
   const c = getBiomeAt(cam.x, cam.y).biome;
   const grd = ctx.createRadialGradient(W / 2, H * 0.42, 0, W / 2, H * 0.42, Math.max(W, H) * 0.8);
   grd.addColorStop(0, c.bg);
@@ -684,6 +889,12 @@ export function drawScene() {
     ctx.arc(hs.x, hs.y, pulseR, 0, Math.PI * 2);
     ctx.fill();
     ctx.restore();
+
+    if (mapTheme === 'forest') {
+      const beastRgb = hunter.stun > 0 ? '150,100,255' : isTitan ? '255,150,60' : '210,40,40';
+      drawBeast(hunter, beastRgb, isTitan ? 26 : 18);
+      continue;
+    }
 
     if (isTitan) {
       ctx.save();

@@ -60,6 +60,18 @@
           <label class="field-label" for="player-name-menu">PILOTE</label>
           <input type="text" id="player-name-menu" maxlength="16" placeholder="Entre ton pseudo" autocomplete="nickname">
 
+          <label class="field-label">DÉCOR</label>
+          <div class="mode-opts" role="group" aria-label="Décor">
+            <button type="button" class="map-btn active" data-map="space" aria-pressed="true">
+              <span class="mode-name">ESPACE</span>
+              <span class="mode-desc">Nébuleuses · galaxies</span>
+            </button>
+            <button type="button" class="map-btn" data-map="forest" aria-pressed="false">
+              <span class="mode-name">FORÊT</span>
+              <span class="mode-desc">Arbres · roches · dense</span>
+            </button>
+          </div>
+
           <label class="field-label">MODE DE JEU</label>
           <div class="mode-opts" role="group" aria-label="Mode de jeu">
             <button type="button" class="mode-btn active" data-mode="classic" aria-pressed="true">

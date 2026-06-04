@@ -358,7 +358,8 @@ input[type='text']:focus {
   margin-bottom: 18px;
 }
 
-.mode-btn {
+.mode-btn,
+.map-btn {
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -388,7 +389,8 @@ input[type='text']:focus {
   text-align: center;
 }
 
-.mode-btn:hover {
+.mode-btn:hover,
+.map-btn:hover {
   border-color: rgba(255, 255, 255, 0.25);
   color: rgba(255, 255, 255, 0.85);
 }
@@ -398,6 +400,13 @@ input[type='text']:focus {
   color: #fff;
   background: linear-gradient(180deg, rgba(99, 220, 255, 0.22), rgba(99, 220, 255, 0.06));
   box-shadow: 0 12px 34px rgba(99, 220, 255, 0.18), 0 0 24px rgba(99, 220, 255, 0.3);
+}
+
+.map-btn.active {
+  border-color: var(--mint);
+  color: #fff;
+  background: linear-gradient(180deg, rgba(124, 255, 199, 0.2), rgba(124, 255, 199, 0.05));
+  box-shadow: 0 12px 34px rgba(124, 255, 199, 0.16), 0 0 24px rgba(124, 255, 199, 0.28);
 }
 
 .hs-opts {
