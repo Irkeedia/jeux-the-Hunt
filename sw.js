@@ -1,4 +1,4 @@
-const CACHE = 'the-hunt-v4';
+const CACHE = 'the-hunt-v7';
 
 const ASSETS = [
   './',

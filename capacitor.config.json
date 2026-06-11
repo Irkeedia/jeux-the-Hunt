@@ -1,0 +1,11 @@
+{
+  "appId": "com.mathieu.thehunt",
+  "appName": "THE HUNT",
+  "webDir": "www",
+  "server": {
+    "androidScheme": "https"
+  },
+  "android": {
+    "allowMixedContent": false
+  }
+}

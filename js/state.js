@@ -1,9 +1,19 @@
 import { CAM_Y_OFFSET, GLOW_SCALE } from './config.js';
 
+// Qualité graphique adaptative : passe à `true` quand les FPS chutent pour
+// alléger les effets lourds (bloom, halos, résolution) et rester fluide.
+export let gfxLow = false;
+
 export const canvas = document.getElementById('c');
-export const ctx = canvas.getContext('2d');
-export let W = (canvas.width = window.innerWidth);
-export let H = (canvas.height = window.innerHeight);
+// alpha:false = le navigateur n'a pas à composer le canvas avec la page,
+// le fond étant toujours peint en entier. Gain notable sur mobile.
+export const ctx = canvas.getContext('2d', { alpha: false });
+export let W = window.innerWidth;
+export let H = window.innerHeight;
+// Rendu net : on suit la densité de pixels de l'écran (plafonnée à 2 pour le
+// coût). W/H restent en pixels CSS « logiques », le scale est porté par la
+// transform du contexte — tout le code de jeu reste inchangé.
+export let DPR = 1;
 
 export const glowCanvas = document.createElement('canvas');
 export const gctx = glowCanvas.getContext('2d');
@@ -12,18 +22,31 @@ export function resizeGlow() {
   glowCanvas.width = Math.max(1, Math.floor(W * GLOW_SCALE));
   glowCanvas.height = Math.max(1, Math.floor(H * GLOW_SCALE));
 }
-resizeGlow();
 
 export function resizeCanvas() {
-  W = canvas.width = window.innerWidth;
-  H = canvas.height = window.innerHeight;
+  W = window.innerWidth;
+  H = window.innerHeight;
+  DPR = gfxLow ? 1 : Math.min(window.devicePixelRatio || 1, 2);
+  canvas.width = Math.max(1, Math.round(W * DPR));
+  canvas.height = Math.max(1, Math.round(H * DPR));
+  canvas.style.width = `${W}px`;
+  canvas.style.height = `${H}px`;
+  ctx.setTransform(DPR, 0, 0, DPR, 0, 0);
   resizeGlow();
 }
+resizeCanvas();
 
 export let gameState = 'menu';
 
 export function setGameState(value) {
   gameState = value;
+}
+
+export function setGfxLow(value) {
+  if (gfxLow === value) return;
+  gfxLow = value;
+  // Le mode allégé baisse aussi la résolution de rendu : gain massif.
+  resizeCanvas();
 }
 
 export function setHunterCount(n) {

@@ -280,16 +280,20 @@ export function ensureGenAround(wx, wy) {
     }
   }
 
-  obstacles.splice(
-    0,
-    obstacles.length,
-    ...obstacles.filter((o) => Math.abs(o.wx - wx) < 1800 && Math.abs(o.wy - wy) < 1800)
-  );
-  specials.splice(
-    0,
-    specials.length,
-    ...specials.filter((o) => Math.abs(o.wx - wx) < 1800 && Math.abs(o.wy - wy) < 1800)
-  );
+  // Purge périodique (et non à chaque frame : recréer ces tableaux 60x/s
+  // génère du travail inutile pour le ramasse-miettes).
+  if (frameCount % 20 === 0) {
+    obstacles.splice(
+      0,
+      obstacles.length,
+      ...obstacles.filter((o) => Math.abs(o.wx - wx) < 1800 && Math.abs(o.wy - wy) < 1800)
+    );
+    specials.splice(
+      0,
+      specials.length,
+      ...specials.filter((o) => Math.abs(o.wx - wx) < 1800 && Math.abs(o.wy - wy) < 1800)
+    );
+  }
 
   if (frameCount % 120 === 0) {
     for (const k of generatedCells) {

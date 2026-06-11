@@ -58,6 +58,8 @@ export function setHunters(n) {
   });
 }
 
+let lastDanger = -1;
+
 export function showPow(txt, col) {
   const el = document.getElementById('powerup-tag');
   el.textContent = txt;
@@ -374,9 +376,14 @@ export function update() {
   if (shake > 0) setShake(shake * 0.88);
 
   const danger = Math.max(0, Math.min(1, 1 - (minHd - 60) / 360));
-  const db = document.getElementById('danger-bar');
-  db.style.background = `rgba(255,50,68,${danger * 0.9})`;
-  db.style.height = `${2 + danger * 5}px`;
+  // Écriture DOM seulement quand la valeur change vraiment : modifier le style
+  // à chaque frame force un recalcul de style inutile.
+  if (frameCount % 4 === 0 && Math.abs(danger - lastDanger) > 0.02) {
+    lastDanger = danger;
+    const db = document.getElementById('danger-bar');
+    db.style.background = `rgba(255,50,68,${danger * 0.9})`;
+    db.style.height = `${2 + danger * 5}px`;
+  }
   if (danger > 0.85 && frameCount % 6 === 0) setShake(Math.max(shake, danger * 4));
 
   particles.forEach((p) => {
@@ -387,6 +394,8 @@ export function update() {
     p.life -= p.decay;
   });
   particles.splice(0, particles.length, ...particles.filter((p) => p.life > 0));
+  // Plafond : évite les pics de rendu lors des grosses rafales (morts, biomes).
+  if (particles.length > 240) particles.splice(0, particles.length - 240);
 
   const curBiome = getBiomeAt(player.wx, player.wy).biome;
   if (curBiome.name !== currentBiomeName) {
@@ -409,9 +418,9 @@ export function update() {
       }
     }
     setCurrentBiomeName(curBiome.name);
+    document.getElementById('biome-tag').textContent = curBiome.name;
   }
   decBiomeFlash();
-  document.getElementById('biome-tag').textContent = curBiome.name;
 
   if (powTimer > 0) {
     setPowTimer(powTimer - 1);

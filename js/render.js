@@ -1,5 +1,6 @@
 import { CAM_Y_OFFSET } from './config.js';
 import {
+  DPR,
   W,
   H,
   biomeFlash,
@@ -10,6 +11,7 @@ import {
   ctx,
   decoy,
   frameCount,
+  gfxLow,
   glowCanvas,
   gctx,
   hunters,
@@ -26,188 +28,288 @@ import {
 } from './state.js';
 import { getBiomeAt, seededRand } from './utils.js';
 
+const timeEl = document.getElementById('time-val');
+const distEl = document.getElementById('dist-val');
+let lastTimeText = '';
+let lastDistText = '';
+
 export function updateHUD(elapsed, distance) {
   const m = Math.floor(elapsed / 60);
   const s = Math.floor(elapsed % 60);
-  document.getElementById('time-val').textContent = `${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`;
-  document.getElementById('dist-val').textContent = distance;
+  const t = `${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`;
+  if (t !== lastTimeText) {
+    timeEl.textContent = t;
+    lastTimeText = t;
+  }
+  const d = String(distance);
+  if (d !== lastDistText) {
+    distEl.textContent = d;
+    lastDistText = d;
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Cache de sprites : tout ce qui coûte cher (shadowBlur, dégradés) est dessiné
+// UNE seule fois dans un canvas hors-écran, puis réaffiché en un drawImage.
+// C'est le cœur de l'optimisation : shadowBlur par frame est ce qui tuait les
+// performances sur mobile.
+// ---------------------------------------------------------------------------
+const spriteCache = new Map();
+
+function getSprite(key, size, draw) {
+  // Les sprites sont bakés à la résolution d'affichage (DPR) pour rester nets.
+  const scale = DPR > 1.5 ? 2 : 1;
+  const k = `${key}|@${scale}`;
+  let s = spriteCache.get(k);
+  if (s) return s;
+  const c = document.createElement('canvas');
+  const px = Math.max(2, Math.ceil(size));
+  c.width = px * scale;
+  c.height = px * scale;
+  const g = c.getContext('2d');
+  g.scale(scale, scale);
+  g.lineJoin = 'round';
+  g.lineCap = 'round';
+  draw(g, px / 2);
+  s = { c, half: px / 2, w: px };
+  spriteCache.set(k, s);
+  if (spriteCache.size > 320) {
+    spriteCache.delete(spriteCache.keys().next().value);
+  }
+  return s;
+}
+
+// Halo lumineux générique (dégradé radial pré-rendu, réutilisé partout).
+function drawHalo(x, y, radius, rgb, alpha) {
+  const key = `halo|${rgb}|${alpha}`;
+  const s = getSprite(key, 128, (g, h) => {
+    const grad = g.createRadialGradient(h, h, 0, h, h, h);
+    grad.addColorStop(0, `rgba(${rgb},${alpha})`);
+    grad.addColorStop(0.45, `rgba(${rgb},${alpha * 0.28})`);
+    grad.addColorStop(1, `rgba(${rgb},0)`);
+    g.fillStyle = grad;
+    g.fillRect(0, 0, h * 2, h * 2);
+  });
+  ctx.drawImage(s.c, x - radius, y - radius, radius * 2, radius * 2);
+}
+
+// ---------------------------------------------------------------------------
+// Obstacles
+// ---------------------------------------------------------------------------
+const PAD = 56; // marge pour que le glow ne soit pas coupé dans le sprite
+
+function hexSprite(o) {
+  const r = Math.round(o.r / 3) * 3;
+  const b = o.biome;
+  return getSprite(`hex|${r}|${b.glow}`, r * 2 + PAD, (g, h) => {
+    g.translate(h, h);
+    g.shadowBlur = 14;
+    g.shadowColor = b.glow;
+    g.strokeStyle = b.glow;
+    g.lineWidth = 2.5;
+    g.fillStyle = b.fill;
+    g.beginPath();
+    for (let i = 0; i < 6; i++) {
+      const a = (i / 6) * Math.PI * 2;
+      const px = Math.cos(a) * r;
+      const py = Math.sin(a) * r;
+      if (i === 0) g.moveTo(px, py);
+      else g.lineTo(px, py);
+    }
+    g.closePath();
+    g.fill();
+    g.stroke();
+    g.shadowBlur = 0;
+    g.globalAlpha = 0.4;
+    g.lineWidth = 1;
+    g.beginPath();
+    g.arc(0, 0, r * 0.5, 0, Math.PI * 2);
+    g.stroke();
+  });
+}
+
+function tubeSprite(o) {
+  const len = Math.round(o.len / 10) * 10;
+  const th = Math.round(o.th / 4) * 4;
+  const b = o.biome;
+  return getSprite(`tube|${len}|${th}|${b.glow}`, len + PAD, (g, h) => {
+    g.translate(h, h);
+    g.shadowBlur = 14;
+    g.shadowColor = b.glow;
+    g.strokeStyle = b.glow;
+    g.lineWidth = 2.5;
+    g.fillStyle = b.fill;
+    const hw = len / 2;
+    g.beginPath();
+    g.moveTo(-hw, -th / 2);
+    g.lineTo(hw, -th / 2);
+    g.arc(hw, 0, th / 2, -Math.PI / 2, Math.PI / 2);
+    g.lineTo(-hw, th / 2);
+    g.arc(-hw, 0, th / 2, Math.PI / 2, -Math.PI / 2);
+    g.closePath();
+    g.fill();
+    g.stroke();
+    g.shadowBlur = 0;
+    g.globalAlpha = 0.35;
+    g.lineWidth = 1;
+    for (let i = -2; i <= 2; i++) {
+      g.beginPath();
+      g.moveTo((i * hw) / 3, -th / 2 + 3);
+      g.lineTo((i * hw) / 3, th / 2 - 3);
+      g.stroke();
+    }
+  });
+}
+
+function spiralSprite(o) {
+  const r = Math.round(o.r / 4) * 4;
+  const b = o.biome;
+  return getSprite(`spiral|${r}|${b.glow}`, r * 2 + PAD, (g, h) => {
+    g.translate(h, h);
+    g.shadowBlur = 16;
+    g.shadowColor = b.glow;
+    g.strokeStyle = b.glow;
+    g.lineWidth = 3;
+    g.beginPath();
+    for (let a = 0; a < Math.PI * 5; a += 0.15) {
+      const rr = r * (a / (Math.PI * 5));
+      const px = Math.cos(a) * rr;
+      const py = Math.sin(a) * rr;
+      if (a === 0) g.moveTo(px, py);
+      else g.lineTo(px, py);
+    }
+    g.stroke();
+    g.fillStyle = b.fill;
+    g.beginPath();
+    g.arc(0, 0, r * 0.42, 0, Math.PI * 2);
+    g.fill();
+    g.stroke();
+  });
+}
+
+function bridgeSprite(o) {
+  const gap = Math.round(o.gap / 6) * 6;
+  const pr = Math.round(o.pr / 4) * 4;
+  const b = o.biome;
+  const ext = gap / 2 + pr * 2;
+  return getSprite(`bridge|${gap}|${pr}|${b.glow}`, ext * 2 + PAD, (g, h) => {
+    g.translate(h, h);
+    g.shadowBlur = 14;
+    g.shadowColor = b.glow;
+    g.strokeStyle = b.glow;
+    g.lineWidth = 2.5;
+    g.fillStyle = b.fill;
+    const off = gap / 2 + pr;
+    [1, -1].forEach((s) => {
+      g.beginPath();
+      g.arc(0, s * off, pr, 0, Math.PI * 2);
+      g.fill();
+      g.stroke();
+    });
+    g.shadowBlur = 0;
+    g.globalAlpha = 0.3;
+    g.setLineDash([5, 5]);
+    g.beginPath();
+    g.moveTo(0, off - pr);
+    g.lineTo(0, -off + pr);
+    g.stroke();
+    g.setLineDash([]);
+  });
+}
+
+function rockSprite(o) {
+  const r = Math.round(o.r / 3) * 3;
+  // variante de forme stable par rocher, mais partagée entre rochers proches
+  const v = Math.abs(Math.round(o.wx * 0.013 + o.wy * 0.027)) % 8;
+  const b = o.biome;
+  return getSprite(`rock|${r}|${v}|${b.glow}`, r * 2.4 + PAD, (g, h) => {
+    g.translate(h, h);
+    g.shadowBlur = 8;
+    g.shadowColor = b.glow;
+    g.fillStyle = b.fill;
+    g.strokeStyle = b.glow;
+    g.lineWidth = 2;
+    g.beginPath();
+    const n = 7;
+    for (let i = 0; i < n; i++) {
+      const a = (i / n) * Math.PI * 2;
+      const rr = r * (0.78 + seededRand(v * 7 + i, v * 3) * 0.32);
+      const px = Math.cos(a) * rr;
+      const py = Math.sin(a) * rr;
+      if (i === 0) g.moveTo(px, py);
+      else g.lineTo(px, py);
+    }
+    g.closePath();
+    g.fill();
+    g.stroke();
+    g.shadowBlur = 0;
+    g.globalAlpha = 0.2;
+    g.fillStyle = '#fff';
+    g.beginPath();
+    g.arc(-r * 0.22, -r * 0.22, r * 0.32, 0, Math.PI * 2);
+    g.fill();
+  });
+}
+
+function treeSprite(o) {
+  const r = Math.round(o.r / 3) * 3;
+  const c = Math.round(o.canopy / 6) * 6;
+  const b = o.biome;
+  return getSprite(`tree|${r}|${c}|${b.glow}`, c * 2.6 + PAD, (g, h) => {
+    g.translate(h, h);
+    g.fillStyle = 'rgba(0,0,0,0.35)';
+    g.beginPath();
+    g.ellipse(c * 0.18, c * 0.2, c * 0.78, c * 0.5, 0, 0, Math.PI * 2);
+    g.fill();
+    g.fillStyle = 'rgba(46,32,20,0.95)';
+    g.beginPath();
+    g.arc(0, 0, r, 0, Math.PI * 2);
+    g.fill();
+    g.shadowBlur = 12;
+    g.shadowColor = b.glow;
+    g.fillStyle = b.fill;
+    g.strokeStyle = b.glow;
+    g.lineWidth = 2;
+    for (let i = 0; i < 5; i++) {
+      const a = (i / 5) * Math.PI * 2;
+      g.beginPath();
+      g.arc(Math.cos(a) * c * 0.4, Math.sin(a) * c * 0.4, c * 0.5, 0, Math.PI * 2);
+      g.fill();
+    }
+    g.beginPath();
+    g.arc(0, 0, c * 0.66, 0, Math.PI * 2);
+    g.fill();
+    g.stroke();
+    g.shadowBlur = 0;
+    g.globalAlpha = 0.18;
+    g.fillStyle = '#eaffe0';
+    g.beginPath();
+    g.arc(-c * 0.2, -c * 0.2, c * 0.28, 0, Math.PI * 2);
+    g.fill();
+  });
 }
 
 function drawObstacle(o) {
   const os = ws(o.wx, o.wy);
-  if (os.x < -200 || os.x > W + 200 || os.y < -200 || os.y > H + 200) return;
-  const b = o.biome;
-  ctx.save();
-  ctx.translate(os.x, os.y);
-  ctx.rotate(o.rot);
-  ctx.lineJoin = 'round';
-  ctx.lineCap = 'round';
-  if (o.type === 'hex') {
-    ctx.shadowBlur = 14;
-    ctx.shadowColor = b.glow;
-    ctx.strokeStyle = b.glow;
-    ctx.lineWidth = 2.5;
-    ctx.fillStyle = b.fill;
-    ctx.beginPath();
-    for (let i = 0; i < 6; i++) {
-      const a = (i / 6) * Math.PI * 2;
-      const px = Math.cos(a) * o.r;
-      const py = Math.sin(a) * o.r;
-      if (i === 0) ctx.moveTo(px, py);
-      else ctx.lineTo(px, py);
-    }
-    ctx.closePath();
-    ctx.fill();
-    ctx.stroke();
-    ctx.strokeStyle = b.glow;
-    ctx.globalAlpha = 0.4;
-    ctx.lineWidth = 1;
-    ctx.beginPath();
-    ctx.arc(0, 0, o.r * 0.5, 0, Math.PI * 2);
-    ctx.stroke();
-    ctx.globalAlpha = 1;
-  } else if (o.type === 'tube') {
-    ctx.shadowBlur = 14;
-    ctx.shadowColor = b.glow;
-    ctx.strokeStyle = b.glow;
-    ctx.lineWidth = 2.5;
-    ctx.fillStyle = b.fill;
+  if (os.x < -240 || os.x > W + 240 || os.y < -240 || os.y > H + 240) return;
+
+  if (o.type === 'doorguard') {
+    // Porte du refuge : animée, mais peu coûteuse sans shadowBlur.
     const hw = o.len / 2;
-    const th = o.th;
-    ctx.beginPath();
-    ctx.moveTo(-hw, -th / 2);
-    ctx.lineTo(hw, -th / 2);
-    ctx.arc(hw, 0, th / 2, -Math.PI / 2, Math.PI / 2);
-    ctx.lineTo(-hw, th / 2);
-    ctx.arc(-hw, 0, th / 2, Math.PI / 2, -Math.PI / 2);
-    ctx.closePath();
-    ctx.fill();
-    ctx.stroke();
-    ctx.strokeStyle = b.glow;
-    ctx.globalAlpha = 0.35;
-    ctx.lineWidth = 1;
-    for (let i = -2; i <= 2; i++) {
-      ctx.beginPath();
-      ctx.moveTo((i * hw) / 3, -th / 2 + 3);
-      ctx.lineTo((i * hw) / 3, th / 2 - 3);
-      ctx.stroke();
-    }
-    ctx.globalAlpha = 1;
-  } else if (o.type === 'spiral') {
-    ctx.shadowBlur = 16;
-    ctx.shadowColor = b.glow;
-    ctx.strokeStyle = b.glow;
-    ctx.lineWidth = 3;
-    ctx.beginPath();
-    for (let a = 0; a < Math.PI * 5; a += 0.15) {
-      const rr = o.r * (a / (Math.PI * 5));
-      const px = Math.cos(a + frameCount * 0.005) * rr;
-      const py = Math.sin(a + frameCount * 0.005) * rr;
-      if (a === 0) ctx.moveTo(px, py);
-      else ctx.lineTo(px, py);
-    }
-    ctx.stroke();
-    ctx.fillStyle = b.fill;
-    ctx.beginPath();
-    ctx.arc(0, 0, o.r * 0.42, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.stroke();
-  } else if (o.type === 'bridge') {
-    ctx.shadowBlur = 14;
-    ctx.shadowColor = b.glow;
-    ctx.strokeStyle = b.glow;
-    ctx.lineWidth = 2.5;
-    ctx.fillStyle = b.fill;
-    const off = o.gap / 2 + o.pr;
-    [1, -1].forEach((s) => {
-      ctx.beginPath();
-      ctx.arc(0, s * off, o.pr, 0, Math.PI * 2);
-      ctx.fill();
-      ctx.stroke();
-    });
-    ctx.globalAlpha = 0.3;
-    ctx.setLineDash([5, 5]);
-    ctx.beginPath();
-    ctx.moveTo(0, off - o.pr);
-    ctx.lineTo(0, -off + o.pr);
-    ctx.stroke();
-    ctx.setLineDash([]);
-    ctx.globalAlpha = 1;
-  } else if (o.type === 'rock') {
-    ctx.shadowBlur = 8;
-    ctx.shadowColor = b.glow;
-    ctx.fillStyle = b.fill;
-    ctx.strokeStyle = b.glow;
-    ctx.lineWidth = 2;
-    ctx.beginPath();
-    const n = 7;
-    for (let i = 0; i < n; i++) {
-      const a = (i / n) * Math.PI * 2;
-      const rr = o.r * (0.78 + seededRand(o.wx + i, o.wy) * 0.32);
-      const px = Math.cos(a) * rr;
-      const py = Math.sin(a) * rr;
-      if (i === 0) ctx.moveTo(px, py);
-      else ctx.lineTo(px, py);
-    }
-    ctx.closePath();
-    ctx.fill();
-    ctx.stroke();
-    ctx.globalAlpha = 0.2;
-    ctx.fillStyle = '#fff';
-    ctx.beginPath();
-    ctx.arc(-o.r * 0.22, -o.r * 0.22, o.r * 0.32, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.globalAlpha = 1;
-  } else if (o.type === 'tree') {
-    const c = o.canopy;
-    // ombre au sol
-    ctx.fillStyle = 'rgba(0,0,0,0.35)';
-    ctx.beginPath();
-    ctx.ellipse(c * 0.18, c * 0.2, c * 0.78, c * 0.5, 0, 0, Math.PI * 2);
-    ctx.fill();
-    // tronc
-    ctx.shadowBlur = 0;
-    ctx.fillStyle = 'rgba(46,32,20,0.95)';
-    ctx.beginPath();
-    ctx.arc(0, 0, o.r, 0, Math.PI * 2);
-    ctx.fill();
-    // feuillage en grappe
-    ctx.shadowBlur = 12;
-    ctx.shadowColor = b.glow;
-    ctx.fillStyle = b.fill;
-    ctx.strokeStyle = b.glow;
-    ctx.lineWidth = 2;
-    for (let i = 0; i < 5; i++) {
-      const a = o.rot + (i / 5) * Math.PI * 2;
-      ctx.beginPath();
-      ctx.arc(Math.cos(a) * c * 0.4, Math.sin(a) * c * 0.4, c * 0.5, 0, Math.PI * 2);
-      ctx.fill();
-    }
-    ctx.beginPath();
-    ctx.arc(0, 0, c * 0.66, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.stroke();
-    // reflets
-    ctx.globalAlpha = 0.18;
-    ctx.fillStyle = '#eaffe0';
-    ctx.beginPath();
-    ctx.arc(-c * 0.2, -c * 0.2, c * 0.28, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.globalAlpha = 1;
-  } else if (o.type === 'doorguard') {
-    // porte du refuge : ouverte pour le joueur, infranchissable pour l'ennemi
-    const hw = o.len / 2;
-    ctx.shadowBlur = 16;
-    ctx.shadowColor = '#63dcff';
-    ctx.strokeStyle = 'rgba(99,220,255,0.8)';
+    ctx.save();
+    ctx.translate(os.x, os.y);
+    ctx.rotate(o.rot);
+    drawHalo(-hw, 0, 14, '99,220,255', 0.7);
+    drawHalo(hw, 0, 14, '99,220,255', 0.7);
     ctx.fillStyle = 'rgba(99,220,255,0.95)';
-    ctx.lineWidth = 2;
     [-hw, hw].forEach((x) => {
       ctx.beginPath();
       ctx.arc(x, 0, 5.5, 0, Math.PI * 2);
       ctx.fill();
     });
     ctx.globalAlpha = 0.22 + Math.sin(frameCount * 0.12) * 0.12;
+    ctx.strokeStyle = 'rgba(99,220,255,0.8)';
+    ctx.lineWidth = 2;
     ctx.setLineDash([6, 9]);
     ctx.beginPath();
     ctx.moveTo(-hw, 0);
@@ -215,8 +317,64 @@ function drawObstacle(o) {
     ctx.stroke();
     ctx.setLineDash([]);
     ctx.globalAlpha = 1;
+    ctx.restore();
+    return;
   }
+
+  let s;
+  let rot = o.rot;
+  if (o.type === 'hex') s = hexSprite(o);
+  else if (o.type === 'tube') s = tubeSprite(o);
+  else if (o.type === 'spiral') {
+    s = spiralSprite(o);
+    rot = o.rot + frameCount * 0.005;
+  } else if (o.type === 'bridge') s = bridgeSprite(o);
+  else if (o.type === 'rock') s = rockSprite(o);
+  else if (o.type === 'tree') s = treeSprite(o);
+  if (!s) return;
+
+  ctx.save();
+  ctx.translate(os.x, os.y);
+  ctx.rotate(rot);
+  ctx.drawImage(s.c, -s.half, -s.half, s.w, s.w);
   ctx.restore();
+}
+
+// ---------------------------------------------------------------------------
+// Monstres
+// ---------------------------------------------------------------------------
+function monsterSprite(aggro, r) {
+  const col = aggro ? '255,70,160' : '150,90,220';
+  return getSprite(`mon|${aggro}|${r}`, r * 2.6 + PAD, (g, h) => {
+    g.translate(h, h);
+    g.shadowBlur = aggro ? 26 : 16;
+    g.shadowColor = `rgba(${col},1)`;
+    g.fillStyle = `rgba(${col},0.9)`;
+    g.strokeStyle = '#fff';
+    g.lineWidth = 1.5;
+    const spikes = 9;
+    g.beginPath();
+    for (let i = 0; i < spikes * 2; i++) {
+      const ang = (i / (spikes * 2)) * Math.PI * 2;
+      const rr = i % 2 === 0 ? r * 1.1 : r * 0.62;
+      const px = Math.cos(ang) * rr;
+      const py = Math.sin(ang) * rr;
+      if (i === 0) g.moveTo(px, py);
+      else g.lineTo(px, py);
+    }
+    g.closePath();
+    g.fill();
+    g.stroke();
+    g.shadowBlur = 0;
+    g.fillStyle = '#fff';
+    g.beginPath();
+    g.arc(0, 0, r * 0.34, 0, Math.PI * 2);
+    g.fill();
+    g.fillStyle = aggro ? '#ff2266' : '#3a1a5a';
+    g.beginPath();
+    g.arc(0, 0, r * 0.17, 0, Math.PI * 2);
+    g.fill();
+  });
 }
 
 function drawMonster(m) {
@@ -234,49 +392,16 @@ function drawMonster(m) {
   });
   ctx.globalAlpha = 1;
 
+  if (!gfxLow) drawHalo(ps.x, ps.y, m.r * 3, col, 0.5);
+
+  const s = monsterSprite(m.aggro, Math.round(m.r));
+  const sc = (1.1 + Math.sin(m.pulse) * 0.12) / 1.1;
   ctx.save();
   ctx.translate(ps.x, ps.y);
-  const halo = ctx.createRadialGradient(0, 0, 0, 0, 0, m.r * 3);
-  halo.addColorStop(0, `rgba(${col},0.5)`);
-  halo.addColorStop(1, `rgba(${col},0)`);
-  ctx.fillStyle = halo;
-  ctx.beginPath();
-  ctx.arc(0, 0, m.r * 3, 0, Math.PI * 2);
-  ctx.fill();
-
-  ctx.save();
   ctx.rotate(m.pulse * 0.3);
-  ctx.shadowBlur = m.aggro ? 26 : 16;
-  ctx.shadowColor = `rgba(${col},1)`;
-  ctx.fillStyle = `rgba(${col},0.9)`;
-  ctx.strokeStyle = '#fff';
-  ctx.lineWidth = 1.5;
-  const spikes = 9;
-  ctx.beginPath();
-  for (let i = 0; i < spikes * 2; i++) {
-    const ang = (i / (spikes * 2)) * Math.PI * 2;
-    const rr = i % 2 === 0 ? m.r * (1.1 + Math.sin(m.pulse) * 0.12) : m.r * 0.62;
-    const px = Math.cos(ang) * rr;
-    const py = Math.sin(ang) * rr;
-    if (i === 0) ctx.moveTo(px, py);
-    else ctx.lineTo(px, py);
-  }
-  ctx.closePath();
-  ctx.fill();
-  ctx.stroke();
+  ctx.scale(sc, sc);
+  ctx.drawImage(s.c, -s.half, -s.half, s.w, s.w);
   ctx.restore();
-
-  ctx.shadowBlur = 0;
-  ctx.fillStyle = '#fff';
-  ctx.beginPath();
-  ctx.arc(0, 0, m.r * 0.34, 0, Math.PI * 2);
-  ctx.fill();
-  ctx.fillStyle = m.aggro ? '#ff2266' : '#3a1a5a';
-  ctx.beginPath();
-  ctx.arc(0, 0, m.r * 0.17, 0, Math.PI * 2);
-  ctx.fill();
-  ctx.restore();
-  ctx.globalAlpha = 1;
 
   if (m.aggro) {
     ctx.save();
@@ -287,27 +412,36 @@ function drawMonster(m) {
     ctx.arc(ps.x, ps.y, m.r + 10 + Math.sin(frameCount * 0.2) * 4, 0, Math.PI * 2);
     ctx.stroke();
     ctx.restore();
-    ctx.globalAlpha = 1;
   }
 }
 
+// ---------------------------------------------------------------------------
+// Spéciaux (boost, téléporteur, trou noir, champ, boue, bonus)
+// ---------------------------------------------------------------------------
 function drawSpecial(s) {
   const os = ws(s.wx, s.wy);
   if (os.x < -200 || os.x > W + 200 || os.y < -200 || os.y > H + 200) return;
   ctx.save();
   ctx.translate(os.x, os.y);
   const t = frameCount * 0.1 + (s.phase || 0);
+
   if (s.type === 'accel') {
-    ctx.shadowBlur = 20;
-    ctx.shadowColor = '#5ad6ff';
+    const sp = getSprite(`accel|${s.r}`, s.r * 2 + PAD, (g, h) => {
+      g.translate(h, h);
+      g.shadowBlur = 20;
+      g.shadowColor = '#5ad6ff';
+      g.strokeStyle = 'rgba(90,214,255,0.9)';
+      g.lineWidth = 3;
+      g.fillStyle = 'rgba(90,214,255,0.08)';
+      g.beginPath();
+      g.arc(0, 0, s.r, 0, Math.PI * 2);
+      g.fill();
+      g.stroke();
+    });
+    ctx.drawImage(sp.c, -sp.half, -sp.half, sp.w, sp.w);
+    ctx.rotate(s.rot);
     ctx.strokeStyle = 'rgba(90,214,255,0.9)';
     ctx.lineWidth = 3;
-    ctx.fillStyle = 'rgba(90,214,255,0.08)';
-    ctx.beginPath();
-    ctx.arc(0, 0, s.r, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.stroke();
-    ctx.rotate(s.rot);
     for (let i = 0; i < 3; i++) {
       const ph = (t + i * 0.5) % 2;
       const sc = 0.4 + ph * 0.5;
@@ -320,23 +454,31 @@ function drawSpecial(s) {
     }
     ctx.globalAlpha = 1;
   } else if (s.type === 'tele') {
-    ctx.shadowBlur = 22;
-    ctx.shadowColor = s.col;
-    ctx.strokeStyle = s.col;
-    ctx.lineWidth = 3;
-    for (let r = 0; r < 3; r++) {
-      ctx.globalAlpha = 0.4 + Math.sin(t + r) * 0.3;
-      ctx.beginPath();
-      ctx.arc(0, 0, s.r - r * 7, 0, Math.PI * 2);
-      ctx.stroke();
-    }
+    const sp = getSprite(`tele|${s.r}|${s.col}`, s.r * 2 + PAD, (g, h) => {
+      g.translate(h, h);
+      g.shadowBlur = 22;
+      g.shadowColor = s.col;
+      g.strokeStyle = s.col;
+      g.lineWidth = 3;
+      for (let r = 0; r < 3; r++) {
+        g.globalAlpha = 0.75 - r * 0.18;
+        g.beginPath();
+        g.arc(0, 0, s.r - r * 7, 0, Math.PI * 2);
+        g.stroke();
+      }
+      g.globalAlpha = 1;
+      g.fillStyle = s.col;
+      g.beginPath();
+      g.arc(0, 0, 4, 0, Math.PI * 2);
+      g.fill();
+    });
+    ctx.globalAlpha = 0.62 + Math.sin(t) * 0.3;
+    ctx.drawImage(sp.c, -sp.half, -sp.half, sp.w, sp.w);
     ctx.globalAlpha = 1;
-    ctx.fillStyle = s.col;
-    ctx.beginPath();
-    ctx.arc(0, 0, 4, 0, Math.PI * 2);
-    ctx.fill();
     const dest = ws(s.destX, s.destY);
     ctx.globalAlpha = 0.15;
+    ctx.strokeStyle = s.col;
+    ctx.lineWidth = 2;
     ctx.setLineDash([4, 8]);
     ctx.beginPath();
     ctx.moveTo(0, 0);
@@ -345,52 +487,63 @@ function drawSpecial(s) {
     ctx.setLineDash([]);
     ctx.globalAlpha = 1;
   } else if (s.type === 'blackhole') {
-    const rr = s.pull;
-    const grd = ctx.createRadialGradient(0, 0, 0, 0, 0, rr);
-    grd.addColorStop(0, 'rgba(120,60,255,0.35)');
-    grd.addColorStop(0.5, 'rgba(60,20,120,0.12)');
-    grd.addColorStop(1, 'rgba(0,0,0,0)');
-    ctx.fillStyle = grd;
-    ctx.beginPath();
-    ctx.arc(0, 0, rr, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.strokeStyle = 'rgba(160,100,255,0.6)';
-    ctx.lineWidth = 2;
-    ctx.beginPath();
-    for (let a = 0; a < Math.PI * 4; a += 0.2) {
-      const ar = s.r * (a / (Math.PI * 4));
-      const px = Math.cos(a + t) * ar;
-      const py = Math.sin(a + t) * ar;
-      if (a === 0) ctx.moveTo(px, py);
-      else ctx.lineTo(px, py);
-    }
-    ctx.stroke();
-    ctx.fillStyle = '#000';
-    ctx.shadowBlur = 20;
-    ctx.shadowColor = '#7733ff';
-    ctx.beginPath();
-    ctx.arc(0, 0, s.r * 0.55, 0, Math.PI * 2);
-    ctx.fill();
+    const sp = getSprite(`bh|${s.r}|${s.pull}`, s.pull * 2 + 24, (g, h) => {
+      g.translate(h, h);
+      const grd = g.createRadialGradient(0, 0, 0, 0, 0, s.pull);
+      grd.addColorStop(0, 'rgba(120,60,255,0.35)');
+      grd.addColorStop(0.5, 'rgba(60,20,120,0.12)');
+      grd.addColorStop(1, 'rgba(0,0,0,0)');
+      g.fillStyle = grd;
+      g.beginPath();
+      g.arc(0, 0, s.pull, 0, Math.PI * 2);
+      g.fill();
+      g.strokeStyle = 'rgba(160,100,255,0.6)';
+      g.lineWidth = 2;
+      g.beginPath();
+      for (let a = 0; a < Math.PI * 4; a += 0.2) {
+        const ar = s.r * (a / (Math.PI * 4));
+        const px = Math.cos(a) * ar;
+        const py = Math.sin(a) * ar;
+        if (a === 0) g.moveTo(px, py);
+        else g.lineTo(px, py);
+      }
+      g.stroke();
+      g.fillStyle = '#000';
+      g.shadowBlur = 20;
+      g.shadowColor = '#7733ff';
+      g.beginPath();
+      g.arc(0, 0, s.r * 0.55, 0, Math.PI * 2);
+      g.fill();
+    });
+    ctx.rotate(t);
+    ctx.drawImage(sp.c, -sp.half, -sp.half, sp.w, sp.w);
   } else if (s.type === 'field') {
-    ctx.shadowBlur = 16;
-    ctx.shadowColor = '#44ff99';
+    const sp = getSprite(`field|${s.r}`, s.r * 2 + PAD, (g, h) => {
+      g.translate(h, h);
+      g.shadowBlur = 16;
+      g.shadowColor = '#44ff99';
+      g.strokeStyle = 'rgba(68,255,153,0.5)';
+      g.lineWidth = 2;
+      g.beginPath();
+      g.arc(0, 0, s.r, 0, Math.PI * 2);
+      g.stroke();
+      g.shadowBlur = 0;
+      g.globalAlpha = 0.05;
+      g.fillStyle = '#44ff99';
+      g.beginPath();
+      g.arc(0, 0, s.r, 0, Math.PI * 2);
+      g.fill();
+    });
+    ctx.globalAlpha = 0.6 + Math.sin(t) * 0.2;
+    ctx.drawImage(sp.c, -sp.half, -sp.half, sp.w, sp.w);
+    ctx.globalAlpha = 0.2;
     ctx.strokeStyle = 'rgba(68,255,153,0.5)';
     ctx.lineWidth = 2;
-    ctx.globalAlpha = 0.6 + Math.sin(t) * 0.2;
-    ctx.beginPath();
-    ctx.arc(0, 0, s.r, 0, Math.PI * 2);
-    ctx.stroke();
-    ctx.globalAlpha = 0.05;
-    ctx.fillStyle = '#44ff99';
-    ctx.beginPath();
-    ctx.arc(0, 0, s.r, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.globalAlpha = 1;
-    ctx.globalAlpha = 0.2;
+    ctx.rotate(t * 0.2);
     for (let ring = 1; ring <= 2; ring++) {
       ctx.beginPath();
       for (let i = 0; i < 6; i++) {
-        const a = (i / 6) * Math.PI * 2 + t * 0.2;
+        const a = (i / 6) * Math.PI * 2;
         const px = Math.cos(a) * s.r * 0.4 * ring;
         const py = Math.sin(a) * s.r * 0.4 * ring;
         if (i === 0) ctx.moveTo(px, py);
@@ -401,127 +554,129 @@ function drawSpecial(s) {
     }
     ctx.globalAlpha = 1;
   } else if (s.type === 'mud') {
-    ctx.fillStyle = 'rgba(90,70,40,0.4)';
-    ctx.strokeStyle = 'rgba(140,110,60,0.4)';
-    ctx.lineWidth = 1.5;
-    ctx.beginPath();
-    ctx.arc(0, 0, s.r, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.stroke();
-    ctx.globalAlpha = 0.3;
-    for (let i = 0; i < 5; i++) {
-      const a = seededRand(s.wx + i, s.wy) * Math.PI * 2;
-      const rr = seededRand(s.wx, s.wy + i) * s.r * 0.6;
-      ctx.beginPath();
-      ctx.arc(Math.cos(a) * rr, Math.sin(a) * rr, 4 + seededRand(i, i) * 6, 0, Math.PI * 2);
-      ctx.fill();
-    }
-    ctx.globalAlpha = 1;
+    const r = Math.round(s.r / 4) * 4;
+    const v = Math.abs(Math.round(s.wx * 0.017 + s.wy * 0.031)) % 8;
+    const sp = getSprite(`mud|${r}|${v}`, r * 2 + 24, (g, h) => {
+      g.translate(h, h);
+      g.fillStyle = 'rgba(90,70,40,0.4)';
+      g.strokeStyle = 'rgba(140,110,60,0.4)';
+      g.lineWidth = 1.5;
+      g.beginPath();
+      g.arc(0, 0, r, 0, Math.PI * 2);
+      g.fill();
+      g.stroke();
+      g.globalAlpha = 0.3;
+      for (let i = 0; i < 5; i++) {
+        const a = seededRand(v + i, v) * Math.PI * 2;
+        const rr = seededRand(v, v + i) * r * 0.6;
+        g.beginPath();
+        g.arc(Math.cos(a) * rr, Math.sin(a) * rr, 4 + seededRand(i, i) * 6, 0, Math.PI * 2);
+        g.fill();
+      }
+    });
+    ctx.drawImage(sp.c, -sp.half, -sp.half, sp.w, sp.w);
   } else if (s.type === 'bonus' && !s.taken) {
     const col = s.bonus === 'decoy' ? '#ffe066' : s.bonus === 'invis' ? '#aaccff' : '#66ff99';
-    ctx.shadowBlur = 18;
-    ctx.shadowColor = col;
-    ctx.strokeStyle = col;
-    ctx.lineWidth = 2;
+    const sp = getSprite(`bonus|${s.r}|${col}`, s.r * 2 + PAD, (g, h) => {
+      g.translate(h, h);
+      g.shadowBlur = 18;
+      g.shadowColor = col;
+      g.strokeStyle = col;
+      g.lineWidth = 2;
+      g.beginPath();
+      for (let i = 0; i < 10; i++) {
+        const a = (i / 10) * Math.PI * 2 - Math.PI / 2;
+        const rr = i % 2 === 0 ? s.r : s.r * 0.45;
+        const px = Math.cos(a) * rr;
+        const py = Math.sin(a) * rr;
+        if (i === 0) g.moveTo(px, py);
+        else g.lineTo(px, py);
+      }
+      g.closePath();
+      g.globalAlpha = 0.18;
+      g.fillStyle = col;
+      g.fill();
+      g.globalAlpha = 1;
+      g.stroke();
+    });
     const bob = Math.sin(t) * 4;
-    ctx.translate(0, bob);
-    ctx.beginPath();
-    for (let i = 0; i < 10; i++) {
-      const a = (i / 10) * Math.PI * 2 - Math.PI / 2;
-      const rr = i % 2 === 0 ? s.r : s.r * 0.45;
-      const px = Math.cos(a) * rr;
-      const py = Math.sin(a) * rr;
-      if (i === 0) ctx.moveTo(px, py);
-      else ctx.lineTo(px, py);
-    }
-    ctx.closePath();
-    ctx.globalAlpha = 0.18;
-    ctx.fillStyle = col;
-    ctx.fill();
-    ctx.globalAlpha = 1;
-    ctx.stroke();
+    ctx.drawImage(sp.c, -sp.half, -sp.half + bob, sp.w, sp.w);
   }
   ctx.restore();
+}
+
+// ---------------------------------------------------------------------------
+// Vaisseaux (joueur + chasseurs) : sprite complet avec halo et glow.
+// ---------------------------------------------------------------------------
+function shipSprite(rgb, glow, r) {
+  return getSprite(`ship|${rgb}|${glow}|${r}`, r * 9.2, (g, h) => {
+    const halo = g.createRadialGradient(h, h, 0, h, h, r * 4.4);
+    halo.addColorStop(0, `rgba(${rgb},0.6)`);
+    halo.addColorStop(0.45, `rgba(${rgb},0.16)`);
+    halo.addColorStop(1, `rgba(${rgb},0)`);
+    g.fillStyle = halo;
+    g.fillRect(0, 0, h * 2, h * 2);
+
+    g.translate(h, h);
+    g.shadowBlur = glow;
+    g.shadowColor = `rgb(${rgb})`;
+    g.strokeStyle = `rgb(${rgb})`;
+    g.lineWidth = 2.5;
+    const s = r;
+
+    const fillGrad = g.createLinearGradient(0, -s * 1.25, 0, s * 1.05);
+    fillGrad.addColorStop(0, 'rgba(255,255,255,0.9)');
+    fillGrad.addColorStop(0.18, `rgba(${rgb},0.72)`);
+    fillGrad.addColorStop(1, `rgba(${rgb},0.18)`);
+    g.fillStyle = fillGrad;
+
+    g.beginPath();
+    g.moveTo(0, -s * 1.28);
+    g.bezierCurveTo(s * 0.95, -s * 0.68, s * 1.08, s * 0.38, s * 0.46, s * 0.86);
+    g.bezierCurveTo(s * 0.2, s * 1.06, -s * 0.2, s * 1.06, -s * 0.46, s * 0.86);
+    g.bezierCurveTo(-s * 1.08, s * 0.38, -s * 0.95, -s * 0.68, 0, -s * 1.28);
+    g.closePath();
+    g.fill();
+    g.stroke();
+
+    g.shadowBlur = glow * 0.35;
+    g.strokeStyle = 'rgba(255,255,255,0.72)';
+    g.lineWidth = 1.4;
+    g.beginPath();
+    g.moveTo(0, -s * 0.88);
+    g.quadraticCurveTo(s * 0.12, -s * 0.08, 0, s * 0.52);
+    g.stroke();
+
+    g.fillStyle = `rgba(${rgb},0.95)`;
+    g.shadowBlur = glow * 0.45;
+    g.beginPath();
+    g.arc(0, -s * 0.12, s * 0.22, 0, Math.PI * 2);
+    g.fill();
+  });
 }
 
 function drawArrow(ent, color, glow) {
   const ps = ws(ent.wx, ent.wy);
   const rgbMatch = color.match(/\d+/g);
   const rgb = rgbMatch ? `${rgbMatch[0]},${rgbMatch[1]},${rgbMatch[2]}` : '255,255,255';
-  const halo = ctx.createRadialGradient(ps.x, ps.y, 0, ps.x, ps.y, ent.r * 4.4);
-  halo.addColorStop(0, `rgba(${rgb},0.6)`);
-  halo.addColorStop(0.45, `rgba(${rgb},0.16)`);
-  halo.addColorStop(1, `rgba(${rgb},0)`);
-  ctx.fillStyle = halo;
-  ctx.beginPath();
-  ctx.arc(ps.x, ps.y, ent.r * 4.4, 0, Math.PI * 2);
-  ctx.fill();
-
+  const s = shipSprite(rgb, glow, Math.round(ent.r));
   ctx.save();
   ctx.translate(ps.x, ps.y);
   ctx.rotate(ent.angle + Math.PI / 2);
-  ctx.shadowBlur = glow;
-  ctx.shadowColor = color;
-  ctx.strokeStyle = color;
-  ctx.lineWidth = 2.5;
-  ctx.lineJoin = 'round';
-  ctx.lineCap = 'round';
-  const s = ent.r;
-
-  const fillGrad = ctx.createLinearGradient(0, -s * 1.25, 0, s * 1.05);
-  fillGrad.addColorStop(0, `rgba(255,255,255,0.9)`);
-  fillGrad.addColorStop(0.18, `rgba(${rgb},0.72)`);
-  fillGrad.addColorStop(1, `rgba(${rgb},0.18)`);
-  ctx.fillStyle = fillGrad;
-
-  // Forme plus ronde et lisible qu'une simple flèche.
-  ctx.beginPath();
-  ctx.moveTo(0, -s * 1.28);
-  ctx.bezierCurveTo(s * 0.95, -s * 0.68, s * 1.08, s * 0.38, s * 0.46, s * 0.86);
-  ctx.bezierCurveTo(s * 0.2, s * 1.06, -s * 0.2, s * 1.06, -s * 0.46, s * 0.86);
-  ctx.bezierCurveTo(-s * 1.08, s * 0.38, -s * 0.95, -s * 0.68, 0, -s * 1.28);
-  ctx.closePath();
-  ctx.fill();
-  ctx.stroke();
-
-  ctx.shadowBlur = glow * 0.35;
-  ctx.strokeStyle = 'rgba(255,255,255,0.72)';
-  ctx.lineWidth = 1.4;
-  ctx.beginPath();
-  ctx.moveTo(0, -s * 0.88);
-  ctx.quadraticCurveTo(s * 0.12, -s * 0.08, 0, s * 0.52);
-  ctx.stroke();
-
-  ctx.fillStyle = `rgba(${rgb},0.95)`;
-  ctx.shadowBlur = glow * 0.45;
-  ctx.beginPath();
-  ctx.arc(0, -s * 0.12, s * 0.22, 0, Math.PI * 2);
-  ctx.fill();
-
+  ctx.drawImage(s.c, -s.half, -s.half, s.w, s.w);
   ctx.restore();
 }
 
-// Poulpe : ennemis de la forêt. Tête bulbeuse vers l'avant, tentacules
-// ondulants qui traînent derrière dans le sens de la nage.
+// Poulpe : ennemis de la forêt (formes simples, pas de shadowBlur).
 function drawOctopus(ent, rgb, glow) {
   const ps = ws(ent.wx, ent.wy);
   const r = ent.r;
-  const halo = ctx.createRadialGradient(ps.x, ps.y, 0, ps.x, ps.y, r * 3.4);
-  halo.addColorStop(0, `rgba(${rgb},0.42)`);
-  halo.addColorStop(1, `rgba(${rgb},0)`);
-  ctx.fillStyle = halo;
-  ctx.beginPath();
-  ctx.arc(ps.x, ps.y, r * 3.4, 0, Math.PI * 2);
-  ctx.fill();
+  if (!gfxLow) drawHalo(ps.x, ps.y, r * 3.4, rgb, 0.42);
 
   ctx.save();
   ctx.translate(ps.x, ps.y);
   ctx.rotate(ent.angle);
-  ctx.shadowBlur = glow;
-  ctx.shadowColor = `rgb(${rgb})`;
 
-  // tentacules : répartis vers l'arrière, chaque bras est une chaîne de
-  // billes qui s'amincit et ondule.
   const tentacles = 7;
   const spread = Math.PI * 1.25;
   for (let i = 0; i < tentacles; i++) {
@@ -546,7 +701,6 @@ function drawOctopus(ent, rgb, glow) {
     }
   }
 
-  // tête / manteau
   ctx.fillStyle = `rgba(${rgb},0.96)`;
   ctx.strokeStyle = 'rgba(18,6,16,0.85)';
   ctx.lineWidth = 2;
@@ -555,7 +709,6 @@ function drawOctopus(ent, rgb, glow) {
   ctx.fill();
   ctx.stroke();
 
-  // reflet lustré
   ctx.globalAlpha = 0.2;
   ctx.fillStyle = '#fff';
   ctx.beginPath();
@@ -563,9 +716,6 @@ function drawOctopus(ent, rgb, glow) {
   ctx.fill();
   ctx.globalAlpha = 1;
 
-  // gros yeux vers l'avant
-  ctx.shadowBlur = glow * 0.7;
-  ctx.shadowColor = '#fff';
   ctx.fillStyle = '#fff';
   [-1, 1].forEach((s) => {
     ctx.beginPath();
@@ -578,8 +728,6 @@ function drawOctopus(ent, rgb, glow) {
     ctx.arc(r * 0.95, s * r * 0.44, r * 0.14, 0, Math.PI * 2);
     ctx.fill();
   });
-  // pupilles brillantes
-  ctx.shadowBlur = 0;
   ctx.fillStyle = '#ff3344';
   [-1, 1].forEach((s) => {
     ctx.beginPath();
@@ -589,46 +737,67 @@ function drawOctopus(ent, rgb, glow) {
   ctx.restore();
 }
 
-function drawForestBackground() {
-  const c = getBiomeAt(cam.x, cam.y).biome;
-  const grd = ctx.createRadialGradient(W / 2, H * 0.42, 0, W / 2, H * 0.42, Math.max(W, H) * 0.85);
-  grd.addColorStop(0, c.bg);
-  grd.addColorStop(1, '#02060a');
-  ctx.fillStyle = grd;
-  ctx.fillRect(-60, -60, W + 120, H + 120);
+// ---------------------------------------------------------------------------
+// Fonds (espace / forêt)
+// ---------------------------------------------------------------------------
+const bgGradCache = new Map();
 
-  // halos de lumière filtrée (rayons / clairières)
-  for (let i = 0; i < 4; i++) {
-    const nx = (((i * 443.3 - cam.x * 0.05) % (W * 1.5)) + W * 1.5) % (W * 1.5) - W * 0.25;
-    const ny = (((i * 287.7 - cam.y * 0.05) % (H * 1.5)) + H * 1.5) % (H * 1.5) - H * 0.25;
-    const ng = ctx.createRadialGradient(nx, ny, 0, nx, ny, 320);
-    ng.addColorStop(0, c.glow.replace(/[\d.]+\)$/, '0.07)'));
-    ng.addColorStop(1, 'rgba(0,0,0,0)');
-    ctx.fillStyle = ng;
-    ctx.fillRect(nx - 320, ny - 320, 640, 640);
+function bgGradient(bg, fallback) {
+  const key = `${bg}|${W}x${H}|${fallback}`;
+  let grd = bgGradCache.get(key);
+  if (!grd) {
+    grd = ctx.createRadialGradient(W / 2, H * 0.42, 0, W / 2, H * 0.42, Math.max(W, H) * 0.85);
+    grd.addColorStop(0, bg);
+    grd.addColorStop(1, fallback);
+    bgGradCache.set(key, grd);
+    if (bgGradCache.size > 24) bgGradCache.delete(bgGradCache.keys().next().value);
   }
+  return grd;
+}
 
-  // grille sol discrète
-  const gs = 90;
-  ctx.strokeStyle = c.grid;
+// Halo de nébuleuse pré-rendu par couleur.
+function nebulaSprite(glow, alpha) {
+  return getSprite(`neb|${glow}|${alpha}`, 256, (g, h) => {
+    const ng = g.createRadialGradient(h, h, 0, h, h, h);
+    ng.addColorStop(0, glow.replace(/[\d.]+\)$/, `${alpha})`));
+    ng.addColorStop(1, 'rgba(0,0,0,0)');
+    g.fillStyle = ng;
+    g.fillRect(0, 0, h * 2, h * 2);
+  });
+}
+
+function drawGrid(gridColor, gs) {
+  ctx.strokeStyle = gridColor;
   ctx.lineWidth = 1;
   const yoff = H * CAM_Y_OFFSET;
   const ox = ((-cam.x % gs) + gs) % gs;
   const oy = (((-cam.y + yoff) % gs) + gs) % gs;
+  ctx.beginPath();
   for (let x = ox - gs; x < W + gs; x += gs) {
-    ctx.beginPath();
     ctx.moveTo(x, 0);
     ctx.lineTo(x, H);
-    ctx.stroke();
   }
   for (let y = oy - gs; y < H + gs; y += gs) {
-    ctx.beginPath();
     ctx.moveTo(0, y);
     ctx.lineTo(W, y);
-    ctx.stroke();
+  }
+  ctx.stroke();
+}
+
+function drawForestBackground() {
+  const c = getBiomeAt(cam.x, cam.y).biome;
+  ctx.fillStyle = bgGradient(c.bg, '#02060a');
+  ctx.fillRect(-60, -60, W + 120, H + 120);
+
+  const neb = nebulaSprite(c.glow, 0.07);
+  for (let i = 0; i < 4; i++) {
+    const nx = (((i * 443.3 - cam.x * 0.05) % (W * 1.5)) + W * 1.5) % (W * 1.5) - W * 0.25;
+    const ny = (((i * 287.7 - cam.y * 0.05) % (H * 1.5)) + H * 1.5) % (H * 1.5) - H * 0.25;
+    ctx.drawImage(neb.c, nx - 320, ny - 320, 640, 640);
   }
 
-  // lucioles
+  drawGrid(c.grid, 90);
+
   ctx.fillStyle = c.glow;
   for (let i = 0; i < 42; i++) {
     const sx = (i * 97.13) % W;
@@ -643,22 +812,35 @@ function drawForestBackground() {
   ctx.globalAlpha = 1;
 }
 
-function drawGalaxy(gx, gy, seed, baseHue) {
+// Les galaxies sont chères (des centaines de cercles) : on les pré-rend une
+// fois, puis on les réaffiche en pivotant l'image.
+const galaxyCache = new Map();
+
+function getGalaxySprite(seed, baseHue) {
+  const key = `${seed}|${baseHue}`;
+  const cached = galaxyCache.get(key);
+  if (cached) return cached;
+
   const r = 140 + seededRand(seed, 1) * 120;
   const arms = 2 + Math.floor(seededRand(seed, 2) * 3);
-  const tilt = seededRand(seed, 3) * Math.PI;
-  const rot = frameCount * 0.0008 * (seededRand(seed, 4) > 0.5 ? 1 : -1);
-  ctx.save();
-  ctx.translate(gx, gy);
-  ctx.rotate(tilt + rot);
-  const core = ctx.createRadialGradient(0, 0, 0, 0, 0, r * 0.55);
+  const pad = 30;
+  const size = Math.ceil((r + pad) * 2);
+  const off = document.createElement('canvas');
+  off.width = size;
+  off.height = size;
+  const g = off.getContext('2d');
+  const cx = size / 2;
+  const cy = size / 2;
+
+  const core = g.createRadialGradient(cx, cy, 0, cx, cy, r * 0.55);
   core.addColorStop(0, `hsla(${baseHue},80%,75%,0.5)`);
   core.addColorStop(0.3, `hsla(${baseHue},70%,55%,0.18)`);
   core.addColorStop(1, 'rgba(0,0,0,0)');
-  ctx.fillStyle = core;
-  ctx.beginPath();
-  ctx.arc(0, 0, r * 0.55, 0, Math.PI * 2);
-  ctx.fill();
+  g.fillStyle = core;
+  g.beginPath();
+  g.arc(cx, cy, r * 0.55, 0, Math.PI * 2);
+  g.fill();
+
   for (let a = 0; a < arms; a++) {
     const armOff = (a / arms) * Math.PI * 2;
     for (let i = 0; i < 60; i++) {
@@ -669,15 +851,36 @@ function drawGalaxy(gx, gy, seed, baseHue) {
       const px = Math.cos(ang) * rad + Math.cos(ang + 1.5) * spread;
       const py = Math.sin(ang) * rad * 0.55 + Math.sin(ang + 1.5) * spread;
       const hue = baseHue + (seededRand(i, a) - 0.5) * 40;
-      ctx.globalAlpha = (1 - t) * 0.5;
-      ctx.fillStyle = `hsl(${hue},75%,${65 + seededRand(i, seed) * 20}%)`;
+      g.globalAlpha = (1 - t) * 0.5;
+      g.fillStyle = `hsl(${hue},75%,${65 + seededRand(i, seed) * 20}%)`;
       const sz = (1 - t) * 2.2 + 0.4;
-      ctx.beginPath();
-      ctx.arc(px, py, sz, 0, Math.PI * 2);
-      ctx.fill();
+      g.beginPath();
+      g.arc(cx + px, cy + py, sz, 0, Math.PI * 2);
+      g.fill();
     }
   }
-  ctx.globalAlpha = 1;
+  g.globalAlpha = 1;
+
+  const sprite = {
+    canvas: off,
+    half: size / 2,
+    tilt: seededRand(seed, 3) * Math.PI,
+    dir: seededRand(seed, 4) > 0.5 ? 1 : -1,
+  };
+  galaxyCache.set(key, sprite);
+  if (galaxyCache.size > 96) {
+    galaxyCache.delete(galaxyCache.keys().next().value);
+  }
+  return sprite;
+}
+
+function drawGalaxy(gx, gy, seed, baseHue) {
+  const sp = getGalaxySprite(seed, baseHue);
+  const rot = frameCount * 0.0008 * sp.dir;
+  ctx.save();
+  ctx.translate(gx, gy);
+  ctx.rotate(sp.tilt + rot);
+  ctx.drawImage(sp.canvas, -sp.half, -sp.half);
   ctx.restore();
 }
 
@@ -711,39 +914,19 @@ function drawBackground() {
     return;
   }
   const c = getBiomeAt(cam.x, cam.y).biome;
-  const grd = ctx.createRadialGradient(W / 2, H * 0.42, 0, W / 2, H * 0.42, Math.max(W, H) * 0.8);
-  grd.addColorStop(0, c.bg);
-  grd.addColorStop(1, '#000');
-  ctx.fillStyle = grd;
+  ctx.fillStyle = bgGradient(c.bg, '#000');
   ctx.fillRect(-60, -60, W + 120, H + 120);
   drawDeepSpace();
+
+  const neb = nebulaSprite(c.glow, 0.05);
   for (let i = 0; i < 3; i++) {
     const nx = ((i * 523.3 - cam.x * 0.04) % (W * 1.5) + W * 1.5) % (W * 1.5) - W * 0.25;
     const ny = ((i * 331.7 - cam.y * 0.04) % (H * 1.5) + H * 1.5) % (H * 1.5) - H * 0.25;
-    const ng = ctx.createRadialGradient(nx, ny, 0, nx, ny, 260);
-    ng.addColorStop(0, c.glow.replace(/[\d.]+\)$/, '0.05)'));
-    ng.addColorStop(1, 'rgba(0,0,0,0)');
-    ctx.fillStyle = ng;
-    ctx.fillRect(nx - 260, ny - 260, 520, 520);
+    ctx.drawImage(neb.c, nx - 260, ny - 260, 520, 520);
   }
-  const gs = 80;
-  ctx.strokeStyle = c.grid;
-  ctx.lineWidth = 1;
-  const yoff = H * CAM_Y_OFFSET;
-  const ox = ((-cam.x % gs) + gs) % gs;
-  const oy = (((-cam.y + yoff) % gs) + gs) % gs;
-  for (let x = ox - gs; x < W + gs; x += gs) {
-    ctx.beginPath();
-    ctx.moveTo(x, 0);
-    ctx.lineTo(x, H);
-    ctx.stroke();
-  }
-  for (let y = oy - gs; y < H + gs; y += gs) {
-    ctx.beginPath();
-    ctx.moveTo(0, y);
-    ctx.lineTo(W, y);
-    ctx.stroke();
-  }
+
+  drawGrid(c.grid, 80);
+
   for (let layer = 0; layer < 2; layer++) {
     const par = 0.15 + layer * 0.25;
     const sz = layer ? 2 : 1.2;
@@ -762,30 +945,33 @@ function drawBackground() {
   ctx.globalAlpha = 1;
 }
 
+// ---------------------------------------------------------------------------
+// Bloom « gratuit » : au lieu d'un vrai flou (ctx.filter, très lent sur
+// mobile), on réduit l'image dans un petit canvas puis on la ré-agrandit :
+// l'interpolation bilinéaire produit naturellement un flou doux.
+// ---------------------------------------------------------------------------
 function applyBloom() {
+  if (gfxLow) return;
   const gw = glowCanvas.width;
   const gh = glowCanvas.height;
-  gctx.clearRect(0, 0, gw, gh);
   gctx.globalCompositeOperation = 'source-over';
   gctx.globalAlpha = 1;
   gctx.drawImage(canvas, 0, 0, gw, gh);
   gctx.globalCompositeOperation = 'multiply';
-  gctx.globalAlpha = 1;
-  gctx.fillStyle = '#3a3a3a';
+  gctx.fillStyle = '#3f3f3f';
   gctx.fillRect(0, 0, gw, gh);
-  gctx.globalCompositeOperation = 'source-over';
   ctx.save();
   ctx.globalCompositeOperation = 'lighter';
-  ctx.filter = 'blur(8px)';
-  ctx.globalAlpha = 0.9;
+  ctx.globalAlpha = 0.55;
   ctx.drawImage(glowCanvas, 0, 0, W, H);
-  ctx.filter = 'blur(18px)';
-  ctx.globalAlpha = 0.7;
-  ctx.drawImage(glowCanvas, 0, 0, W, H);
-  ctx.filter = 'none';
+  ctx.globalAlpha = 0.3;
+  ctx.drawImage(glowCanvas, -W * 0.004, -H * 0.004, W * 1.008, H * 1.008);
   ctx.restore();
 }
 
+// ---------------------------------------------------------------------------
+// Scène
+// ---------------------------------------------------------------------------
 export function drawScene() {
   ctx.save();
   if (shake > 0.5) ctx.translate((Math.random() - 0.5) * shake, (Math.random() - 0.5) * shake);
@@ -833,8 +1019,7 @@ export function drawScene() {
     const ds = ws(decoy.wx, decoy.wy);
     ctx.save();
     ctx.globalAlpha = 0.4 + Math.sin(frameCount * 0.3) * 0.2;
-    ctx.shadowBlur = 16;
-    ctx.shadowColor = '#ffe066';
+    drawHalo(ds.x, ds.y, player.r * 2.6, '255,224,102', 0.55);
     ctx.strokeStyle = '#ffe066';
     ctx.lineWidth = 2;
     ctx.beginPath();
@@ -846,10 +1031,13 @@ export function drawScene() {
   shockwaves.forEach((sw) => {
     const c = ws(sw.wx, sw.wy);
     ctx.save();
-    ctx.globalAlpha = Math.min(1, sw.life);
-    ctx.shadowBlur = 30;
-    ctx.shadowColor = '#ffaa33';
+    ctx.globalAlpha = Math.min(1, sw.life) * 0.45;
     ctx.strokeStyle = '#ffaa33';
+    ctx.lineWidth = 12;
+    ctx.beginPath();
+    ctx.arc(c.x, c.y, sw.r, 0, Math.PI * 2);
+    ctx.stroke();
+    ctx.globalAlpha = Math.min(1, sw.life);
     ctx.lineWidth = 6;
     ctx.beginPath();
     ctx.arc(c.x, c.y, sw.r, 0, Math.PI * 2);
@@ -867,8 +1055,6 @@ export function drawScene() {
       const hsw = ws(hunter.wx, hunter.wy);
       ctx.save();
       ctx.globalAlpha = 0.5;
-      ctx.shadowBlur = 30;
-      ctx.shadowColor = '#ffaa33';
       ctx.strokeStyle = '#ffaa33';
       ctx.lineWidth = 3;
       ctx.beginPath();
@@ -882,48 +1068,48 @@ export function drawScene() {
   for (const hunter of hunters) {
     const isTitan = hunter.type === 'titan';
     const hs = ws(hunter.wx, hunter.wy);
-    const pulseR = hunter.r + 8 + Math.sin(hunter.pulse) * 4;
-    ctx.save();
-    ctx.globalAlpha = 0.25 + Math.sin(hunter.pulse) * 0.1;
-    ctx.shadowBlur = isTitan ? 36 : 25;
-    ctx.shadowColor = isTitan ? '#ff8a2a' : '#ff3344';
-    ctx.fillStyle = isTitan ? 'rgba(255,138,42,0.16)' : 'rgba(255,50,68,0.15)';
-    ctx.beginPath();
-    ctx.arc(hs.x, hs.y, pulseR, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.restore();
+    if (hs.x > -160 && hs.x < W + 160 && hs.y > -160 && hs.y < H + 160) {
+      const pulseR = hunter.r + 8 + Math.sin(hunter.pulse) * 4;
+      ctx.globalAlpha = 0.25 + Math.sin(hunter.pulse) * 0.1;
+      drawHalo(hs.x, hs.y, pulseR * 1.9, isTitan ? '255,138,42' : '255,50,68', 0.55);
+      ctx.globalAlpha = 1;
 
-    if (mapTheme === 'forest') {
-      const octoRgb = hunter.stun > 0 ? '150,100,255' : isTitan ? '255,150,60' : '170,70,210';
-      drawOctopus(hunter, octoRgb, isTitan ? 26 : 18);
-      continue;
-    }
-
-    if (isTitan) {
-      ctx.save();
-      ctx.translate(hs.x, hs.y);
-      ctx.rotate(hunter.pulse * 0.18);
-      ctx.shadowBlur = 18;
-      ctx.shadowColor = '#ff8a2a';
-      ctx.strokeStyle = 'rgba(255,150,60,0.85)';
-      ctx.lineWidth = 3;
-      const sp = 10;
-      ctx.beginPath();
-      for (let i = 0; i < sp * 2; i++) {
-        const ang = (i / (sp * 2)) * Math.PI * 2;
-        const rr = i % 2 === 0 ? hunter.r * 1.38 : hunter.r * 0.96;
-        const px = Math.cos(ang) * rr;
-        const py = Math.sin(ang) * rr;
-        if (i === 0) ctx.moveTo(px, py);
-        else ctx.lineTo(px, py);
+      if (mapTheme === 'forest') {
+        const octoRgb = hunter.stun > 0 ? '150,100,255' : isTitan ? '255,150,60' : '170,70,210';
+        drawOctopus(hunter, octoRgb, isTitan ? 26 : 18);
+        continue;
       }
-      ctx.closePath();
-      ctx.stroke();
-      ctx.restore();
-    }
 
-    const arrowCol = hunter.stun > 0 ? 'rgb(150,100,255)' : isTitan ? 'rgb(255,138,42)' : 'rgb(255,50,68)';
-    drawArrow(hunter, arrowCol, isTitan ? 28 : 22);
+      if (isTitan) {
+        const ring = getSprite(`titanring|${hunter.r}`, hunter.r * 2.8 + PAD, (g, h) => {
+          g.translate(h, h);
+          g.shadowBlur = 18;
+          g.shadowColor = '#ff8a2a';
+          g.strokeStyle = 'rgba(255,150,60,0.85)';
+          g.lineWidth = 3;
+          const sp = 10;
+          g.beginPath();
+          for (let i = 0; i < sp * 2; i++) {
+            const ang = (i / (sp * 2)) * Math.PI * 2;
+            const rr = i % 2 === 0 ? hunter.r * 1.38 : hunter.r * 0.96;
+            const px = Math.cos(ang) * rr;
+            const py = Math.sin(ang) * rr;
+            if (i === 0) g.moveTo(px, py);
+            else g.lineTo(px, py);
+          }
+          g.closePath();
+          g.stroke();
+        });
+        ctx.save();
+        ctx.translate(hs.x, hs.y);
+        ctx.rotate(hunter.pulse * 0.18);
+        ctx.drawImage(ring.c, -ring.half, -ring.half, ring.w, ring.w);
+        ctx.restore();
+      }
+
+      const arrowCol = hunter.stun > 0 ? 'rgb(150,100,255)' : isTitan ? 'rgb(255,138,42)' : 'rgb(255,50,68)';
+      drawArrow(hunter, arrowCol, isTitan ? 28 : 22);
+    }
   }
 
   if (!player.dead) {
@@ -937,8 +1123,6 @@ export function drawScene() {
     ctx.save();
     ctx.translate(ps.x, ps.y);
     ctx.rotate(player.angle + Math.PI / 2);
-    ctx.shadowBlur = 12;
-    ctx.shadowColor = '#ffa050';
     ctx.fillStyle = 'rgba(255,170,90,0.9)';
     ctx.beginPath();
     ctx.arc(0, player.r * 0.85, 2.4 + Math.random() * 2 + (player.boost > 0 ? 4 : 0), 0, Math.PI * 2);
@@ -958,8 +1142,6 @@ export function drawScene() {
       ctx.save();
       ctx.translate(ex, ey);
       ctx.rotate(a);
-      ctx.shadowBlur = 12;
-      ctx.shadowColor = '#ff3344';
       ctx.fillStyle = '#ff3344';
       ctx.beginPath();
       ctx.moveTo(10, 0);
@@ -991,13 +1173,10 @@ export function drawScene() {
     ctx.fillRect(0, 0, W, H);
     ctx.restore();
 
-    // anneau d'onde qui balaie l'écran
     ctx.save();
     ctx.globalAlpha = pulse * 0.7;
     ctx.strokeStyle = biomeFlashGlow;
     ctx.lineWidth = 4;
-    ctx.shadowBlur = 24;
-    ctx.shadowColor = biomeFlashGlow;
     ctx.beginPath();
     ctx.arc(W / 2, H / 2, (1 - t) * Math.max(W, H) * 0.75, 0, Math.PI * 2);
     ctx.stroke();
